@@ -3,6 +3,7 @@
  * 
  * Modal dialog for creating and editing subjects.
  * Handles form validation and API calls.
+ * Fully responsive with scrollable content on mobile.
  */
 
 import { useState, useEffect } from 'react'
@@ -156,27 +157,31 @@ export function SubjectDialog({ open, onClose, onSuccess, subject }: SubjectDial
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="max-w-[95vw] sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
         <form onSubmit={handleSubmit}>
-          <DialogHeader>
-            <DialogTitle>{isEditing ? 'Edit Subject' : 'Add Subject'}</DialogTitle>
-            <DialogDescription>
+          <DialogHeader className="pb-4">
+            <DialogTitle className="text-lg sm:text-xl">
+              {isEditing ? 'Edit Subject' : 'Add Subject'}
+            </DialogTitle>
+            <DialogDescription className="text-sm">
               {isEditing 
                 ? 'Update the subject details below.' 
                 : 'Create a new study subject to track with active recall.'}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 py-4">
+          <div className="grid gap-4 py-2">
             {/* Name */}
             <div className="grid gap-2">
-              <Label htmlFor="name">Name</Label>
+              <Label htmlFor="name" className="text-sm font-medium">
+                Name
+              </Label>
               <Input
                 id="name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g., Cardiology"
-                className={errors.name ? 'border-destructive' : ''}
+                className={`h-11 ${errors.name ? 'border-destructive' : ''}`}
               />
               {errors.name && (
                 <p className="text-sm text-destructive">{errors.name}</p>
@@ -185,13 +190,15 @@ export function SubjectDialog({ open, onClose, onSuccess, subject }: SubjectDial
 
             {/* Start Date */}
             <div className="grid gap-2">
-              <Label htmlFor="startDate">Start Date</Label>
+              <Label htmlFor="startDate" className="text-sm font-medium">
+                Start Date
+              </Label>
               <Input
                 id="startDate"
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className={errors.startDate ? 'border-destructive' : ''}
+                className={`h-11 ${errors.startDate ? 'border-destructive' : ''}`}
               />
               {errors.startDate && (
                 <p className="text-sm text-destructive">{errors.startDate}</p>
@@ -200,17 +207,24 @@ export function SubjectDialog({ open, onClose, onSuccess, subject }: SubjectDial
 
             {/* Schedule Type */}
             <div className="grid gap-2">
-              <Label htmlFor="scheduleType">Schedule Type</Label>
+              <Label htmlFor="scheduleType" className="text-sm font-medium">
+                Schedule Type
+              </Label>
               <Select 
                 value={scheduleType} 
                 onValueChange={(value) => setScheduleType(value as ScheduleType)}
               >
-                <SelectTrigger>
+                <SelectTrigger className="h-11">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="DEFAULT">
-                    Default ({DEFAULT_INTERVALS.join(', ')} days)
+                    <span className="block">
+                      <span className="font-medium">Default</span>
+                      <span className="text-xs text-muted-foreground block sm:inline sm:ml-1">
+                        ({DEFAULT_INTERVALS.slice(0, 4).join(', ')}... days)
+                      </span>
+                    </span>
                   </SelectItem>
                   <SelectItem value="CUSTOM">Custom Intervals</SelectItem>
                 </SelectContent>
@@ -220,13 +234,15 @@ export function SubjectDialog({ open, onClose, onSuccess, subject }: SubjectDial
             {/* Custom Intervals (shown only for CUSTOM schedule) */}
             {scheduleType === 'CUSTOM' && (
               <div className="grid gap-2">
-                <Label htmlFor="customIntervals">Custom Intervals (days)</Label>
+                <Label htmlFor="customIntervals" className="text-sm font-medium">
+                  Custom Intervals (days)
+                </Label>
                 <Input
                   id="customIntervals"
                   value={customIntervals}
                   onChange={(e) => setCustomIntervals(e.target.value)}
                   placeholder="e.g., 1, 3, 7, 14, 30"
-                  className={errors.customIntervals ? 'border-destructive' : ''}
+                  className={`h-11 ${errors.customIntervals ? 'border-destructive' : ''}`}
                 />
                 <p className="text-xs text-muted-foreground">
                   Enter positive integers separated by commas
@@ -238,11 +254,21 @@ export function SubjectDialog({ open, onClose, onSuccess, subject }: SubjectDial
             )}
           </div>
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+          <DialogFooter className="flex-col-reverse sm:flex-row gap-2 pt-4">
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={onClose} 
+              disabled={saving}
+              className="w-full sm:w-auto"
+            >
               Cancel
             </Button>
-            <Button type="submit" disabled={saving}>
+            <Button 
+              type="submit" 
+              disabled={saving}
+              className="w-full sm:w-auto"
+            >
               {saving ? 'Saving...' : isEditing ? 'Update' : 'Create'}
             </Button>
           </DialogFooter>

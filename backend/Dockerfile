@@ -1,12 +1,13 @@
 # Active Recall Monitor - Backend Dockerfile
 # Multi-stage build for smaller production image
+# Works on ARM64 (RPi5) and AMD64
 
 # Stage 1: Builder
 FROM python:3.11-slim as builder
 
 WORKDIR /app
 
-# Install build dependencies
+# Install build dependencies (including for argon2)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libffi-dev \
@@ -34,9 +35,12 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Copy application code
 COPY . .
 
+# Create data directory for SQLite (when mounted as volume)
+RUN mkdir -p /data
+
 # Create non-root user for security
-RUN useradd --create-home --shell /bin/bash appuser && \
-    chown -R appuser:appuser /app
+RUN useradd --create-home --shell /bin/bash --uid 1000 appuser && \
+    chown -R appuser:appuser /app /data
 USER appuser
 
 # Expose port 7070

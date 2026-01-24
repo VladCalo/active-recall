@@ -4,17 +4,16 @@
  * This module provides typed functions for all API operations.
  * Uses axios for HTTP requests with consistent error handling.
  * 
- * Authentication:
- * - Access tokens are stored in memory (not localStorage for security)
- * - Refresh tokens are stored in httpOnly cookies (handled by browser)
+ * Security:
+ * - Access tokens stored in memory only (not localStorage)
+ * - Refresh tokens in httpOnly cookies (handled by browser)
  * - Automatic token refresh on 401 responses
+ * - Rate limit handling with retry-after support
  */
 
 import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios'
 
 // Base URL for API requests
-// In development, Vite proxies /api to the backend
-// In production, this should be the backend URL
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
 
 // =============================================================================
@@ -81,6 +80,18 @@ export interface AuthResponse {
 
 export interface ApiError {
   detail: string
+  retry_after?: number
+}
+
+// Custom error class for rate limiting
+export class RateLimitError extends Error {
+  retryAfter: number
+  
+  constructor(message: string, retryAfter: number) {
+    super(message)
+    this.name = 'RateLimitError'
+    this.retryAfter = retryAfter
+  }
 }
 
 // =============================================================================
@@ -105,13 +116,13 @@ export function clearAccessToken(): void {
 // Axios Instance Configuration
 // =============================================================================
 
-// Create axios instance with default config
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
   withCredentials: true, // Required for httpOnly cookies
+  timeout: 30000, // 30 second timeout
 })
 
 // Request interceptor to add auth token
@@ -125,7 +136,7 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 )
 
-// Response interceptor for token refresh
+// Response interceptor for token refresh and error handling
 let isRefreshing = false
 let failedQueue: Array<{
   resolve: (value: unknown) => void
@@ -145,16 +156,22 @@ const processQueue = (error: Error | null, token: string | null = null) => {
 
 api.interceptors.response.use(
   (response) => response,
-  async (error: AxiosError) => {
+  async (error: AxiosError<ApiError>) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
     
-    // Don't try to refresh if this IS the refresh request or auth endpoints
+    // Handle rate limiting (429)
+    if (error.response?.status === 429) {
+      const retryAfter = parseInt(error.response.headers['retry-after'] || '60', 10)
+      const message = error.response.data?.detail || 'Too many requests. Please try again later.'
+      return Promise.reject(new RateLimitError(message, retryAfter))
+    }
+    
+    // Don't try to refresh if this IS the refresh request or other auth endpoints
     const isAuthEndpoint = originalRequest.url?.includes('/auth/')
     
     // If 401 and not already retrying and not an auth endpoint, try to refresh token
     if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
       if (isRefreshing) {
-        // If already refreshing, queue this request
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject })
         }).then((token) => {
@@ -176,7 +193,6 @@ api.interceptors.response.use(
       } catch (refreshError) {
         processQueue(refreshError as Error, null)
         clearAccessToken()
-        // Don't redirect here - let the app handle it
         return Promise.reject(refreshError)
       } finally {
         isRefreshing = false
@@ -191,13 +207,16 @@ api.interceptors.response.use(
 // Error Handling
 // =============================================================================
 
-/**
- * Extract error message from API error response.
- */
 function getErrorMessage(error: unknown): string {
+  if (error instanceof RateLimitError) {
+    return error.message
+  }
   if (error instanceof AxiosError) {
     if (error.response?.data?.detail) {
       return error.response.data.detail
+    }
+    if (error.response?.status === 429) {
+      return 'Too many requests. Please try again later.'
     }
     if (error.message) {
       return error.message
@@ -210,9 +229,6 @@ function getErrorMessage(error: unknown): string {
 // Auth API Functions
 // =============================================================================
 
-/**
- * Register a new user.
- */
 export async function register(email: string, password: string): Promise<AuthResponse> {
   try {
     const response = await api.post<AuthResponse>('/auth/register', { email, password })
@@ -223,9 +239,6 @@ export async function register(email: string, password: string): Promise<AuthRes
   }
 }
 
-/**
- * Log in a user.
- */
 export async function login(email: string, password: string): Promise<AuthResponse> {
   try {
     const response = await api.post<AuthResponse>('/auth/login', { email, password })
@@ -236,9 +249,6 @@ export async function login(email: string, password: string): Promise<AuthRespon
   }
 }
 
-/**
- * Log out the current user.
- */
 export async function logout(): Promise<void> {
   try {
     await api.post('/auth/logout')
@@ -247,17 +257,11 @@ export async function logout(): Promise<void> {
   }
 }
 
-/**
- * Get the current user's profile.
- */
 export async function getMe(): Promise<User> {
   const response = await api.get<User>('/auth/me')
   return response.data
 }
 
-/**
- * Refresh the access token.
- */
 export async function refreshToken(): Promise<AuthResponse> {
   const response = await api.post<AuthResponse>('/auth/refresh')
   setAccessToken(response.data.access_token)
@@ -268,9 +272,6 @@ export async function refreshToken(): Promise<AuthResponse> {
 // Health API Functions
 // =============================================================================
 
-/**
- * Health check - verify backend is running.
- */
 export async function healthCheck(): Promise<boolean> {
   try {
     const response = await api.get('/health')
@@ -284,25 +285,16 @@ export async function healthCheck(): Promise<boolean> {
 // Subjects API Functions
 // =============================================================================
 
-/**
- * Get all subjects.
- */
 export async function getSubjects(): Promise<Subject[]> {
   const response = await api.get<Subject[]>('/subjects')
   return response.data
 }
 
-/**
- * Get a single subject by ID.
- */
 export async function getSubject(id: string): Promise<Subject> {
   const response = await api.get<Subject>(`/subjects/${id}`)
   return response.data
 }
 
-/**
- * Create a new subject.
- */
 export async function createSubject(data: SubjectCreate): Promise<Subject> {
   try {
     const response = await api.post<Subject>('/subjects', data)
@@ -312,9 +304,6 @@ export async function createSubject(data: SubjectCreate): Promise<Subject> {
   }
 }
 
-/**
- * Update an existing subject.
- */
 export async function updateSubject(id: string, data: SubjectUpdate): Promise<Subject> {
   try {
     const response = await api.put<Subject>(`/subjects/${id}`, data)
@@ -324,9 +313,6 @@ export async function updateSubject(id: string, data: SubjectUpdate): Promise<Su
   }
 }
 
-/**
- * Delete a subject.
- */
 export async function deleteSubject(id: string): Promise<void> {
   try {
     await api.delete(`/subjects/${id}`)
@@ -339,11 +325,6 @@ export async function deleteSubject(id: string): Promise<void> {
 // Reviews API Functions
 // =============================================================================
 
-/**
- * Get subjects due for review today.
- * 
- * @param timezone - IANA timezone string (default: Europe/Bucharest)
- */
 export async function getTodayReviews(timezone = 'Europe/Bucharest'): Promise<TodayReviewsResponse> {
   const response = await api.get<TodayReviewsResponse>('/reviews/today', {
     params: { tz: timezone },
@@ -351,12 +332,6 @@ export async function getTodayReviews(timezone = 'Europe/Bucharest'): Promise<To
   return response.data
 }
 
-/**
- * Get upcoming reviews for the next N days.
- * 
- * @param days - Number of days to look ahead (default: 7)
- * @param timezone - IANA timezone string (default: Europe/Bucharest)
- */
 export async function getUpcomingReviews(
   days = 7,
   timezone = 'Europe/Bucharest'

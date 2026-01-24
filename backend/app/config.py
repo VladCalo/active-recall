@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./app.db"
     
     # ==========================================================================
+    # Redis (for rate limiting and session storage)
+    # ==========================================================================
+    redis_url: Optional[str] = None  # e.g., redis://localhost:6379/0
+    
+    # ==========================================================================
     # CORS - Security: Lock down in production
     # ==========================================================================
     # In production, set to your actual frontend domain(s)
@@ -44,7 +49,7 @@ class Settings(BaseSettings):
     jwt_secret_key: str = ""
     jwt_algorithm: str = "HS256"
     
-    # Token expiration times (in minutes)
+    # Token expiration times
     access_token_expire_minutes: int = 15  # Short-lived for security
     refresh_token_expire_days: int = 7     # Longer-lived, stored in httpOnly cookie
     
@@ -56,15 +61,41 @@ class Settings(BaseSettings):
     cookie_samesite: str = "lax"  # lax or strict
     cookie_domain: Optional[str] = None  # Set in production if needed
     
-    # Rate limiting
-    rate_limit_auth: str = "5/minute"  # Auth endpoints
-    rate_limit_general: str = "100/minute"  # General API endpoints
+    # CSRF token secret (for double-submit cookie pattern)
+    csrf_secret_key: str = ""
     
-    # Password policy
-    min_password_length: int = 8
+    # ==========================================================================
+    # Rate Limiting (configurable via env)
+    # ==========================================================================
+    # Auth endpoints
+    rate_limit_login: str = "5/5minute"         # 5 attempts per 5 minutes
+    rate_limit_register: str = "3/10minute"      # 3 registrations per 10 minutes
+    rate_limit_refresh: str = "30/minute"        # 30 refreshes per minute
     
-    # Brute force protection
+    # General API
+    rate_limit_api_per_user: str = "120/minute"  # 120 requests per minute per user
+    rate_limit_api_per_ip: str = "60/minute"     # 60 requests per minute per IP
+    
+    # ==========================================================================
+    # Password Policy
+    # ==========================================================================
+    min_password_length: int = 10
+    require_password_complexity: bool = True
+    check_common_passwords: bool = True
+    
+    # ==========================================================================
+    # Brute Force Protection
+    # ==========================================================================
     login_delay_seconds: float = 0.5  # Small delay after failed login
+    max_login_attempts: int = 5       # Before temporary lockout
+    lockout_duration_minutes: int = 15
+    
+    # ==========================================================================
+    # Request Limits
+    # ==========================================================================
+    max_request_body_size: int = 1_048_576  # 1MB
+    max_subject_name_length: int = 255
+    max_intervals_count: int = 50
     
     # ==========================================================================
     # Application Settings
@@ -82,28 +113,49 @@ class Settings(BaseSettings):
         In development, generate a random key (with warning).
         """
         if not v:
-            # Check if we're in production
             env = info.data.get('environment', 'development')
             if env == 'production':
                 raise ValueError(
                     "JWT_SECRET_KEY must be set in production! "
                     "Generate with: python -c \"import secrets; print(secrets.token_urlsafe(64))\""
                 )
-            # Generate a random key for development (warning: sessions won't persist across restarts)
             import warnings
             warnings.warn(
                 "JWT_SECRET_KEY not set - using random key. "
-                "Sessions will not persist across restarts. "
-                "Set JWT_SECRET_KEY environment variable for persistent sessions.",
+                "Sessions will not persist across restarts.",
                 UserWarning
             )
             return secrets.token_urlsafe(64)
         return v
 
+    @field_validator('csrf_secret_key')
+    @classmethod
+    def validate_csrf_secret(cls, v: str, info) -> str:
+        """Generate CSRF secret if not provided."""
+        if not v:
+            env = info.data.get('environment', 'development')
+            if env == 'production':
+                raise ValueError("CSRF_SECRET_KEY must be set in production!")
+            return secrets.token_urlsafe(32)
+        return v
+
+    @field_validator('cors_origins')
+    @classmethod
+    def validate_cors_origins(cls, v: list[str], info) -> list[str]:
+        """Validate CORS origins in production."""
+        env = info.data.get('environment', 'development')
+        if env == 'production':
+            # Ensure no wildcard or localhost in production
+            for origin in v:
+                if '*' in origin:
+                    raise ValueError("Wildcard CORS origins not allowed in production")
+                if 'localhost' in origin or '127.0.0.1' in origin:
+                    raise ValueError("localhost CORS origins not allowed in production")
+        return v
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
-        # Allow environment variables to use different naming
         env_prefix = ""
 
 

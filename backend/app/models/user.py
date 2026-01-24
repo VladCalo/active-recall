@@ -5,17 +5,19 @@ Security considerations:
 - Passwords are hashed using Argon2 (memory-hard, resistant to GPU attacks)
 - Email is stored case-insensitively (normalized to lowercase)
 - No sensitive data exposed in repr
+- Failed login tracking for brute force protection
 """
 
 import uuid
 from datetime import datetime
 from typing import Optional, TYPE_CHECKING
-from sqlalchemy import String, DateTime, func, Index
+from sqlalchemy import String, DateTime, Integer, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 if TYPE_CHECKING:
     from app.models.subject import Subject
+    from app.models.refresh_token import RefreshToken
 
 
 class User(Base):
@@ -28,6 +30,8 @@ class User(Base):
         id: UUID primary key (stored as string for SQLite compatibility)
         email: Unique email address (stored lowercase for case-insensitive matching)
         password_hash: Argon2 hash of the user's password
+        failed_login_attempts: Count of consecutive failed logins
+        locked_until: Timestamp until account is unlocked
         created_at: Timestamp when account was created
         updated_at: Timestamp when account was last modified
         last_login_at: Timestamp of last successful login
@@ -53,6 +57,17 @@ class User(Base):
         nullable=False
     )
     
+    # Brute force protection
+    failed_login_attempts: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0
+    )
+    locked_until: Mapped[Optional[datetime]] = mapped_column(
+        DateTime,
+        nullable=True
+    )
+    
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime, 
@@ -73,6 +88,11 @@ class User(Base):
     # Relationships
     subjects: Mapped[list["Subject"]] = relationship(
         "Subject",
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
+    refresh_tokens: Mapped[list["RefreshToken"]] = relationship(
+        "RefreshToken",
         back_populates="user",
         cascade="all, delete-orphan"
     )

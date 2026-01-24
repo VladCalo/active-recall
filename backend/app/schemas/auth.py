@@ -4,13 +4,13 @@ Pydantic schemas for authentication operations.
 These schemas handle validation for registration, login, and token responses.
 
 Security considerations:
-- Password validation enforces minimum length
+- Password validation enforces minimum length and complexity
 - Email is normalized (lowercase, stripped)
 - Error messages don't reveal whether email exists
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from app.config import get_settings
 
@@ -23,6 +23,7 @@ class UserRegister(BaseModel):
     password: str = Field(
         ..., 
         min_length=settings.min_password_length,
+        max_length=128,  # Prevent DoS with very long passwords
         description=f"Password (minimum {settings.min_password_length} characters)"
     )
     
@@ -31,27 +32,16 @@ class UserRegister(BaseModel):
     def normalize_email(cls, v: str) -> str:
         """Normalize email to lowercase."""
         return v.lower().strip()
-    
-    @field_validator('password')
-    @classmethod
-    def validate_password(cls, v: str) -> str:
-        """
-        Validate password strength.
-        
-        Currently just enforces minimum length.
-        Can be extended with complexity requirements.
-        """
-        if len(v) < settings.min_password_length:
-            raise ValueError(
-                f"Password must be at least {settings.min_password_length} characters"
-            )
-        return v
 
 
 class UserLogin(BaseModel):
     """Schema for user login."""
     email: EmailStr = Field(..., description="User email address")
-    password: str = Field(..., description="User password")
+    password: str = Field(
+        ..., 
+        max_length=128,  # Prevent DoS with very long passwords
+        description="User password"
+    )
     
     @field_validator('email')
     @classmethod
@@ -90,3 +80,27 @@ class AuthResponse(BaseModel):
 class MessageResponse(BaseModel):
     """Generic message response."""
     message: str
+
+
+class PasswordRequirementsResponse(BaseModel):
+    """Schema for password requirements."""
+    min_length: int
+    requirements: List[str]
+
+
+class RateLimitedResponse(BaseModel):
+    """Schema for rate limited response."""
+    detail: str
+    retry_after: int = Field(..., description="Seconds until retry is allowed")
+
+
+class SessionInfo(BaseModel):
+    """Schema for active session information."""
+    id: str
+    created_at: datetime
+    ip_address: Optional[str]
+    user_agent: Optional[str]
+    expires_at: datetime
+
+    class Config:
+        from_attributes = True

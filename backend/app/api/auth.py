@@ -3,14 +3,15 @@ Authentication API endpoints.
 
 Handles user registration, login, logout, token refresh, and profile access.
 
-Security considerations:
-- Rate limited to prevent brute force
-- Generic error messages prevent user enumeration
-- Refresh tokens stored in httpOnly cookies
-- Access tokens returned in response body
+Security features:
+- Rate limiting per endpoint type
+- Generic error messages (no user enumeration)
+- Refresh tokens in httpOnly cookies
+- Token rotation with reuse detection
+- CSRF protection for state-changing operations
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Response, Request, Cookie
+from fastapi import APIRouter, Depends, HTTPException, status, Response, Request, Cookie, Header
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from typing import Optional
@@ -23,15 +24,27 @@ from app.schemas.auth import (
     UserResponse,
     AuthResponse,
     MessageResponse,
+    PasswordRequirementsResponse,
 )
 from app.core.deps import get_current_user
 from app.core.security import decode_token
+from app.core.password import get_password_requirements
+from app.core.rate_limiter import limiter
+from app.core.logging import auth_logger
 from app.models.user import User
 from app.config import get_settings
 
 settings = get_settings()
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+
+def get_client_ip(request: Request) -> str:
+    """Extract client IP from request (handles proxies)."""
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
 
 
 def get_auth_service(db: Session = Depends(get_db)) -> AuthService:
@@ -61,18 +74,23 @@ def set_refresh_cookie(response: Response, refresh_token: str) -> None:
 
 def clear_auth_cookies(response: Response) -> None:
     """Clear all auth-related cookies."""
-    response.delete_cookie(
-        key="refresh_token",
-        path="/api/auth",
-    )
-    response.delete_cookie(
-        key="access_token",
-        path="/",
+    response.delete_cookie(key="refresh_token", path="/api/auth")
+    response.delete_cookie(key="access_token", path="/")
+
+
+@router.get("/password-requirements", response_model=PasswordRequirementsResponse)
+async def get_password_requirements_endpoint():
+    """Get password requirements for registration."""
+    return PasswordRequirementsResponse(
+        min_length=settings.min_password_length,
+        requirements=get_password_requirements()
     )
 
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit(settings.rate_limit_register)
 async def register(
+    request: Request,
     data: UserRegister,
     response: Response,
     auth_service: AuthService = Depends(get_auth_service),
@@ -80,28 +98,29 @@ async def register(
     """
     Register a new user.
     
-    Creates a new user account and returns authentication tokens.
-    
-    Args:
-        data: Registration data (email, password)
-        
-    Returns:
-        User profile and access token
-        
-    Raises:
-        400: If registration fails (e.g., email exists)
-        422: If validation fails
+    Rate limited: 3 registrations per 10 minutes per IP.
     """
+    ip = get_client_ip(request)
+    user_agent = request.headers.get("User-Agent", "")[:500]
+    
     try:
-        user, access_token, refresh_token = auth_service.register(data)
+        user, access_token, refresh_token = auth_service.register(
+            data, ip_address=ip, user_agent=user_agent
+        )
     except ValueError as e:
-        # Generic error to prevent user enumeration
+        error_msg = str(e)
+        # Check if it's a password strength issue (safe to show)
+        if "Password requirements" in error_msg:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_msg
+            )
+        # Generic error for other issues (email exists, etc.)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Registration failed. Please check your input and try again."
         )
     
-    # Set refresh token in httpOnly cookie
     set_refresh_cookie(response, refresh_token)
     
     return AuthResponse(
@@ -112,7 +131,9 @@ async def register(
 
 
 @router.post("/login", response_model=AuthResponse)
+@limiter.limit(settings.rate_limit_login)
 async def login(
+    request: Request,
     data: UserLogin,
     response: Response,
     auth_service: AuthService = Depends(get_auth_service),
@@ -120,21 +141,17 @@ async def login(
     """
     Authenticate a user.
     
-    Validates credentials and returns authentication tokens.
-    
-    Args:
-        data: Login credentials (email, password)
-        
-    Returns:
-        User profile and access token
-        
-    Raises:
-        401: If credentials are invalid
+    Rate limited: 5 attempts per 5 minutes per IP.
     """
-    result = await auth_service.login(data.email, data.password)
+    ip = get_client_ip(request)
+    user_agent = request.headers.get("User-Agent", "")[:500]
+    
+    result = await auth_service.login(
+        data.email, data.password, 
+        ip_address=ip, user_agent=user_agent
+    )
     
     if not result:
-        # Generic error to prevent user enumeration
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
@@ -143,7 +160,6 @@ async def login(
     
     user, access_token, refresh_token = result
     
-    # Set refresh token in httpOnly cookie
     set_refresh_cookie(response, refresh_token)
     
     return AuthResponse(
@@ -154,17 +170,29 @@ async def login(
 
 
 @router.post("/logout", response_model=MessageResponse)
-async def logout(response: Response):
+async def logout(
+    request: Request,
+    response: Response,
+    refresh_token: Optional[str] = Cookie(default=None),
+    db: Session = Depends(get_db),
+):
     """
     Log out the current user.
     
-    Clears all authentication cookies.
-    
-    Note: Client should also discard the access token from memory.
-    
-    Returns:
-        Success message
+    Clears cookies and revokes refresh token.
     """
+    ip = get_client_ip(request)
+    
+    if refresh_token:
+        payload = decode_token(refresh_token)
+        if payload:
+            user_id = payload.get("sub")
+            token_id = payload.get("jti")
+            if user_id:
+                auth_service = AuthService(db)
+                auth_service.logout(user_id, token_id)
+                auth_logger.logout(user_id, ip)
+    
     clear_auth_cookies(response)
     return MessageResponse(message="Successfully logged out")
 
@@ -175,14 +203,12 @@ async def get_me(current_user: User = Depends(get_current_user)):
     Get current user profile.
     
     Requires authentication.
-    
-    Returns:
-        Current user's profile
     """
     return UserResponse.model_validate(current_user)
 
 
 @router.post("/refresh", response_model=AuthResponse)
+@limiter.limit(settings.rate_limit_refresh)
 async def refresh_tokens(
     request: Request,
     response: Response,
@@ -192,18 +218,14 @@ async def refresh_tokens(
     """
     Refresh authentication tokens.
     
-    Uses the refresh token from httpOnly cookie to generate new tokens.
+    Implements token rotation - old token is invalidated.
     
-    Returns:
-        New access token and updated refresh token
-        
-    Raises:
-        401: If refresh token is invalid or expired
+    Rate limited: 30 refreshes per minute per IP.
     """
-    # Try to get refresh token from cookie or request body
-    token = refresh_token
+    ip = get_client_ip(request)
+    user_agent = request.headers.get("User-Agent", "")[:500]
     
-    if not token:
+    if not refresh_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token not found",
@@ -211,7 +233,7 @@ async def refresh_tokens(
         )
     
     # Decode and validate refresh token
-    payload = decode_token(token)
+    payload = decode_token(refresh_token)
     if not payload:
         clear_auth_cookies(response)
         raise HTTPException(
@@ -229,21 +251,12 @@ async def refresh_tokens(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # Get user
+    # Perform token rotation
     auth_service = AuthService(db)
-    user_id = payload.get("sub")
-    user = auth_service.get_user_by_id(user_id) if user_id else None
+    result = auth_service.refresh_tokens(
+        payload, ip_address=ip, user_agent=user_agent
+    )
     
-    if not user:
-        clear_auth_cookies(response)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    # Generate new tokens
-    result = auth_service.refresh_tokens(payload)
     if not result:
         clear_auth_cookies(response)
         raise HTTPException(
@@ -252,9 +265,9 @@ async def refresh_tokens(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    new_access_token, new_refresh_token = result
+    new_access_token, new_refresh_token, user = result
     
-    # Update refresh token cookie
+    # Set new refresh token cookie
     set_refresh_cookie(response, new_refresh_token)
     
     return AuthResponse(

@@ -17,7 +17,7 @@ from app.database import Base
 from app.config import get_settings
 
 # Import all models to ensure they're registered with Base
-from app.models import User, Subject  # noqa: F401
+from app.models import User, Subject, RefreshToken  # noqa: F401
 
 # Alembic Config object
 config = context.config
@@ -35,15 +35,7 @@ target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
-    """
-    Run migrations in 'offline' mode.
-
-    This configures the context with just a URL and not an Engine,
-    though an Engine is also acceptable here. By skipping the Engine creation
-    we don't even need a DBAPI to be available.
-
-    Calls to context.execute() here emit the given string to the script output.
-    """
+    """Run migrations in 'offline' mode."""
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
@@ -57,12 +49,7 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    """
-    Run migrations in 'online' mode.
-
-    In this scenario we need to create an Engine and associate a connection
-    with the context.
-    """
+    """Run migrations in 'online' mode."""
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
@@ -70,11 +57,11 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        # Enable batch mode for SQLite (required for ALTER TABLE operations)
+        # Enable batch mode for SQLite
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
-            render_as_batch=True,  # Important for SQLite
+            render_as_batch=True,
         )
 
         with context.begin_transaction():

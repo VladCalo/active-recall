@@ -1,17 +1,14 @@
-# Active Recall Monitor - Docker Compose Configuration
+# Active Recall Monitor - Production Docker Compose for RPi5
 #
-# Production-ready setup with:
-# - Backend (FastAPI) on port 7070
-# - Frontend (React/Nginx) on port 80/5173
-# - Redis for rate limiting and session management
+# This configuration:
+# - Stores database in /mnt/ssd/apps/active-recall/data/db (persistent)
+# - Stores Redis in /mnt/ssd/apps/active-recall/data/redis (persistent)
+# - Runs on ports 7070 (backend) and 80 (frontend)
+# - Auto-restarts on failure
+# - Includes Redis for rate limiting
 #
 # Usage:
-#   Development: docker-compose up --build
-#   Production:  docker-compose --profile production up -d
-#
-# Required environment variables for production:
-#   JWT_SECRET_KEY - Generate with: python -c "import secrets; print(secrets.token_urlsafe(64))"
-#   CSRF_SECRET_KEY - Generate with: python -c "import secrets; print(secrets.token_urlsafe(32))"
+#   docker-compose -f docker-compose.prod.yml up -d
 
 version: '3.8'
 
@@ -22,15 +19,15 @@ services:
   redis:
     image: redis:7-alpine
     container_name: active-recall-redis
-    restart: unless-stopped
-    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    restart: always
+    command: redis-server --appendonly yes --maxmemory 64mb --maxmemory-policy allkeys-lru
     volumes:
-      - redis_data:/data
+      - ${DATA_DIR:-/mnt/ssd/apps/active-recall/data}/redis:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
       - app-network
 
@@ -42,26 +39,23 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: active-recall-backend
-    restart: unless-stopped
+    restart: always
     ports:
       - "7070:7070"
     environment:
-      - ENVIRONMENT=${ENVIRONMENT:-development}
-      - DEBUG=${DEBUG:-false}
-      - DATABASE_URL=sqlite:///./app.db
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - DATABASE_URL=sqlite:////data/active-recall.db
       - REDIS_URL=redis://redis:6379/0
       - DEFAULT_TIMEZONE=Europe/Bucharest
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY is required for production}
-      - CSRF_SECRET_KEY=${CSRF_SECRET_KEY:-}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
+      - CSRF_SECRET_KEY=${CSRF_SECRET_KEY:?CSRF_SECRET_KEY is required}
       - COOKIE_SECURE=${COOKIE_SECURE:-false}
-      - COOKIE_SAMESITE=${COOKIE_SAMESITE:-lax}
-      - CORS_ORIGINS=${CORS_ORIGINS:-["http://localhost:5173","http://localhost"]}
-      - MIN_PASSWORD_LENGTH=${MIN_PASSWORD_LENGTH:-12}
-      - RATE_LIMIT_LOGIN=${RATE_LIMIT_LOGIN:-5/5minute}
-      - RATE_LIMIT_REGISTER=${RATE_LIMIT_REGISTER:-3/10minute}
-      - RATE_LIMIT_REFRESH=${RATE_LIMIT_REFRESH:-30/minute}
+      - COOKIE_SAMESITE=lax
+      - CORS_ORIGINS=${CORS_ORIGINS:-["http://localhost","http://localhost:80"]}
+      - MIN_PASSWORD_LENGTH=10
     volumes:
-      - backend_data:/app
+      - ${DATA_DIR:-/mnt/ssd/apps/active-recall/data}/db:/data
     depends_on:
       redis:
         condition: service_healthy
@@ -70,7 +64,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 30s
     networks:
       - app-network
 
@@ -82,9 +76,9 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: active-recall-frontend
-    restart: unless-stopped
+    restart: always
     ports:
-      - "5173:80"
+      - "80:80"
     depends_on:
       backend:
         condition: service_healthy
@@ -95,12 +89,6 @@ services:
       retries: 3
     networks:
       - app-network
-
-volumes:
-  redis_data:
-    driver: local
-  backend_data:
-    driver: local
 
 networks:
   app-network:

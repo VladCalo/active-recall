@@ -10,7 +10,7 @@ This module provides shared fixtures for all tests:
 
 import pytest
 from datetime import date
-from typing import Generator, Tuple
+from typing import Generator
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, StaticPool
@@ -20,6 +20,7 @@ from app.main import app
 from app.database import Base, get_db
 from app.models.user import User
 from app.models.subject import Subject, ScheduleType
+from app.models.refresh_token import RefreshToken
 from app.core.security import hash_password, create_access_token
 
 
@@ -28,7 +29,7 @@ TEST_DATABASE_URL = "sqlite:///:memory:"
 test_engine = create_engine(
     TEST_DATABASE_URL,
     connect_args={"check_same_thread": False},
-    poolclass=StaticPool,  # Use single connection for in-memory SQLite
+    poolclass=StaticPool,
 )
 TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 
@@ -40,7 +41,6 @@ def db() -> Generator[Session, None, None]:
     
     Creates all tables before the test and drops them after.
     """
-    # Create tables
     Base.metadata.create_all(bind=test_engine)
     
     db = TestSessionLocal()
@@ -48,7 +48,6 @@ def db() -> Generator[Session, None, None]:
         yield db
     finally:
         db.close()
-        # Drop all tables after test
         Base.metadata.drop_all(bind=test_engine)
 
 
@@ -73,10 +72,11 @@ def client(db: Session) -> Generator[TestClient, None, None]:
 
 @pytest.fixture
 def test_user(db: Session) -> User:
-    """Create a test user."""
+    """Create a test user with a strong password."""
     user = User(
         email="test@example.com",
-        password_hash=hash_password("password123"),
+        # Password: Test@Password123 (meets all requirements)
+        password_hash=hash_password("Test@Password123"),
     )
     db.add(user)
     db.commit()
@@ -89,7 +89,7 @@ def other_user(db: Session) -> User:
     """Create another test user for isolation tests."""
     user = User(
         email="other@example.com",
-        password_hash=hash_password("password123"),
+        password_hash=hash_password("Other@Password123"),
     )
     db.add(user)
     db.commit()

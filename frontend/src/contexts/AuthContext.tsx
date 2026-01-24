@@ -16,9 +16,7 @@ import {
   login as apiLogin,
   logout as apiLogout,
   register as apiRegister,
-  getMe,
   refreshToken,
-  setAccessToken,
   clearAccessToken,
 } from '@/lib/api'
 

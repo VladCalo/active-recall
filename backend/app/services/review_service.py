@@ -3,6 +3,8 @@ Review service - handles review scheduling logic.
 
 This service computes due dates based on spaced repetition intervals
 and determines which subjects need review on specific dates.
+
+Security: All operations are scoped to the authenticated user.
 """
 
 from datetime import date, timedelta
@@ -11,6 +13,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.models.subject import Subject, ScheduleType
+from app.models.user import User
 from app.services.subject_service import SubjectService
 from app.config import get_settings
 
@@ -21,13 +24,22 @@ class ReviewService:
     
     Handles all logic related to computing due dates and finding
     subjects that need review.
+    
+    All operations are scoped to a specific user for security.
     """
 
-    def __init__(self, db: Session):
-        """Initialize with database session."""
+    def __init__(self, db: Session, user: User):
+        """
+        Initialize with database session and authenticated user.
+        
+        Args:
+            db: Database session
+            user: Authenticated user (all operations scoped to this user)
+        """
         self.db = db
+        self.user = user
         self.settings = get_settings()
-        self.subject_service = SubjectService(db)
+        self.subject_service = SubjectService(db, user)
 
     def get_today(self, timezone: str = None) -> date:
         """
@@ -128,7 +140,7 @@ class ReviewService:
 
     def get_subjects_due_today(self, timezone: str = None) -> list[Subject]:
         """
-        Get all subjects due for review today.
+        Get all subjects due for review today for the current user.
         
         Args:
             timezone: Timezone for determining 'today'
@@ -150,7 +162,7 @@ class ReviewService:
         end_date: date
     ) -> dict[date, list[Subject]]:
         """
-        Get all subjects due for review in a date range.
+        Get all subjects due for review in a date range for the current user.
         
         Args:
             start_date: Start of range (inclusive)

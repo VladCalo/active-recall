@@ -6,6 +6,9 @@ Create Date: 2026-01-25
 
 This migration creates the initial subjects table for tracking
 study subjects with active recall scheduling.
+
+Note: The unique constraint on name is temporary - it will be
+changed to per-user uniqueness in migration 002.
 """
 from typing import Sequence, Union
 
@@ -25,7 +28,7 @@ def upgrade() -> None:
     op.create_table(
         'subjects',
         sa.Column('id', sa.String(36), primary_key=True),
-        sa.Column('name', sa.String(255), nullable=False, unique=True),
+        sa.Column('name', sa.String(255), nullable=False),
         sa.Column('start_date', sa.Date(), nullable=False),
         sa.Column(
             'schedule_type', 
@@ -46,6 +49,8 @@ def upgrade() -> None:
             nullable=False, 
             server_default=sa.text('CURRENT_TIMESTAMP')
         ),
+        # Unique constraint with name for later removal
+        sa.UniqueConstraint('name', name='uq_subjects_name'),
     )
     
     # Create index on name for faster lookups

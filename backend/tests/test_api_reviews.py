@@ -4,6 +4,8 @@ Tests for the /api/reviews endpoints.
 Tests cover:
 - GET /api/reviews/today
 - GET /api/reviews/upcoming
+
+All tests use authenticated requests.
 """
 
 import pytest
@@ -16,9 +18,9 @@ from app.services.review_service import ReviewService
 class TestTodayReviews:
     """Tests for GET /api/reviews/today endpoint."""
 
-    def test_returns_empty_when_no_subjects(self, client):
+    def test_returns_empty_when_no_subjects(self, client, auth_headers):
         """Should return empty list when no subjects exist."""
-        response = client.get("/api/reviews/today")
+        response = client.get("/api/reviews/today", headers=auth_headers)
         
         assert response.status_code == 200
         data = response.json()
@@ -27,7 +29,7 @@ class TestTodayReviews:
         assert "today" in data
         assert data["timezone"] == "Europe/Bucharest"
 
-    def test_returns_due_subjects(self, client, sample_subject):
+    def test_returns_due_subjects(self, client, sample_subject, auth_headers):
         """Should return subjects due today."""
         # Mock today to be a due date
         with patch.object(
@@ -35,7 +37,7 @@ class TestTodayReviews:
             'get_today', 
             return_value=date(2026, 1, 26)
         ):
-            response = client.get("/api/reviews/today")
+            response = client.get("/api/reviews/today", headers=auth_headers)
         
             assert response.status_code == 200
             data = response.json()
@@ -43,22 +45,22 @@ class TestTodayReviews:
             assert len(data["subjects"]) == 1
             assert data["subjects"][0]["name"] == "Cardiology"
 
-    def test_respects_timezone_parameter(self, client, sample_subject):
+    def test_respects_timezone_parameter(self, client, sample_subject, auth_headers):
         """Should use provided timezone for date calculation."""
-        response = client.get("/api/reviews/today?tz=UTC")
+        response = client.get("/api/reviews/today?tz=UTC", headers=auth_headers)
         
         assert response.status_code == 200
         data = response.json()
         assert data["timezone"] == "UTC"
 
-    def test_includes_subject_details(self, client, sample_subject):
+    def test_includes_subject_details(self, client, sample_subject, auth_headers):
         """Response should include full subject details with intervals."""
         with patch.object(
             ReviewService, 
             'get_today', 
             return_value=date(2026, 1, 26)
         ):
-            response = client.get("/api/reviews/today")
+            response = client.get("/api/reviews/today", headers=auth_headers)
             
             data = response.json()
             subject = data["subjects"][0]
@@ -74,14 +76,14 @@ class TestTodayReviews:
 class TestUpcomingReviews:
     """Tests for GET /api/reviews/upcoming endpoint."""
 
-    def test_returns_upcoming_reviews(self, client, sample_subject):
+    def test_returns_upcoming_reviews(self, client, sample_subject, auth_headers):
         """Should return reviews for the next N days."""
         with patch.object(
             ReviewService, 
             'get_today', 
             return_value=date(2026, 1, 25)
         ):
-            response = client.get("/api/reviews/upcoming?days=7")
+            response = client.get("/api/reviews/upcoming?days=7", headers=auth_headers)
             
             assert response.status_code == 200
             data = response.json()
@@ -91,31 +93,30 @@ class TestUpcomingReviews:
             assert "reviews" in data
             assert data["total_count"] >= 0
 
-    def test_default_days_is_7(self, client):
+    def test_default_days_is_7(self, client, auth_headers):
         """Should default to 7 days if not specified."""
-        response = client.get("/api/reviews/upcoming")
+        response = client.get("/api/reviews/upcoming", headers=auth_headers)
         
         assert response.status_code == 200
-        # Just verify it works with default
 
-    def test_validates_days_range(self, client):
+    def test_validates_days_range(self, client, auth_headers):
         """Should reject days outside valid range."""
         # Too small
-        response = client.get("/api/reviews/upcoming?days=0")
+        response = client.get("/api/reviews/upcoming?days=0", headers=auth_headers)
         assert response.status_code == 422
         
         # Too large
-        response = client.get("/api/reviews/upcoming?days=400")
+        response = client.get("/api/reviews/upcoming?days=400", headers=auth_headers)
         assert response.status_code == 422
 
-    def test_groups_by_date(self, client, sample_subject):
+    def test_groups_by_date(self, client, sample_subject, auth_headers):
         """Reviews should be grouped by date."""
         with patch.object(
             ReviewService, 
             'get_today', 
             return_value=date(2026, 1, 25)
         ):
-            response = client.get("/api/reviews/upcoming?days=14")
+            response = client.get("/api/reviews/upcoming?days=14", headers=auth_headers)
             
             data = response.json()
             reviews = data["reviews"]

@@ -7,8 +7,8 @@
 #
 # Usage:
 #   ./run.sh          # Run both backend and frontend
-#   ./run.sh backend  # Run only backend
-#   ./run.sh frontend # Run only frontend
+#   ./run.sh backend  # Run only backend (port 7070)
+#   ./run.sh frontend # Run only frontend (port 5173)
 #   ./run.sh setup    # Initial setup (install dependencies)
 #
 # =============================================================================
@@ -53,6 +53,7 @@ setup() {
     if command_exists python3; then
         python3 -m venv venv
         source venv/bin/activate
+        pip install --upgrade pip
         pip install -r requirements.txt
         log_info "Backend dependencies installed"
     else
@@ -74,11 +75,15 @@ setup() {
     
     log_info "Setup complete!"
     log_info "Run './run.sh' to start the application"
+    log_info ""
+    log_info "Default URLs:"
+    log_info "  Backend:  http://localhost:7070"
+    log_info "  Frontend: http://localhost:5173"
 }
 
 # Function to run the backend
 run_backend() {
-    log_info "Starting backend..."
+    log_info "Starting backend on port 7070..."
     cd "$PROJECT_ROOT/backend"
     
     # Activate virtual environment if it exists
@@ -86,13 +91,13 @@ run_backend() {
         source venv/bin/activate
     fi
     
-    # Run migrations and start server
-    uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+    # Run server on port 7070
+    uvicorn app.main:app --reload --host 0.0.0.0 --port 7070
 }
 
 # Function to run the frontend
 run_frontend() {
-    log_info "Starting frontend..."
+    log_info "Starting frontend on port 5173..."
     cd "$PROJECT_ROOT/frontend"
     npm run dev
 }
@@ -100,7 +105,7 @@ run_frontend() {
 # Function to run both services
 run_all() {
     log_info "Starting Active Recall Monitor..."
-    log_info "Backend: http://localhost:8000"
+    log_info "Backend:  http://localhost:7070"
     log_info "Frontend: http://localhost:5173"
     log_info "Press Ctrl+C to stop both services"
     
@@ -109,7 +114,7 @@ run_all() {
     if [ -d "venv" ]; then
         source venv/bin/activate
     fi
-    uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 &
+    uvicorn app.main:app --reload --host 0.0.0.0 --port 7070 &
     BACKEND_PID=$!
     
     # Run frontend in foreground

@@ -2,16 +2,18 @@
 Subject service - handles all subject-related business logic.
 
 This service provides CRUD operations for subjects and handles
-validation logic like case-insensitive name uniqueness.
+validation logic like case-insensitive name uniqueness per user.
+
+Security: All operations are scoped to the authenticated user.
 """
 
 from datetime import date
 from typing import Optional
-from sqlalchemy import func
+from sqlalchemy import func, and_
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
 
 from app.models.subject import Subject, ScheduleType
+from app.models.user import User
 from app.schemas.subject import SubjectCreate, SubjectUpdate
 from app.config import get_settings
 
@@ -22,24 +24,48 @@ class SubjectService:
     
     All database operations for subjects should go through this service
     to ensure business rules are consistently applied.
+    
+    All operations are scoped to a specific user for security.
     """
 
-    def __init__(self, db: Session):
-        """Initialize with database session."""
+    def __init__(self, db: Session, user: User):
+        """
+        Initialize with database session and authenticated user.
+        
+        Args:
+            db: Database session
+            user: Authenticated user (all operations scoped to this user)
+        """
         self.db = db
+        self.user = user
         self.settings = get_settings()
 
     def get_all(self) -> list[Subject]:
-        """Get all subjects, ordered by name."""
-        return self.db.query(Subject).order_by(Subject.name).all()
+        """Get all subjects for the current user, ordered by name."""
+        return self.db.query(Subject).filter(
+            Subject.user_id == self.user.id
+        ).order_by(Subject.name).all()
 
     def get_by_id(self, subject_id: str) -> Optional[Subject]:
-        """Get a subject by its ID."""
-        return self.db.query(Subject).filter(Subject.id == subject_id).first()
+        """
+        Get a subject by its ID, ensuring it belongs to the current user.
+        
+        Args:
+            subject_id: UUID of the subject
+            
+        Returns:
+            Subject if found and owned by user, None otherwise
+        """
+        return self.db.query(Subject).filter(
+            and_(
+                Subject.id == subject_id,
+                Subject.user_id == self.user.id
+            )
+        ).first()
 
     def get_by_name(self, name: str) -> Optional[Subject]:
         """
-        Get a subject by name (case-insensitive).
+        Get a subject by name (case-insensitive) for the current user.
         
         Args:
             name: Subject name to search for
@@ -48,12 +74,15 @@ class SubjectService:
             Subject if found, None otherwise
         """
         return self.db.query(Subject).filter(
-            func.lower(Subject.name) == name.lower().strip()
+            and_(
+                func.lower(Subject.name) == name.lower().strip(),
+                Subject.user_id == self.user.id
+            )
         ).first()
 
     def create(self, data: SubjectCreate) -> Subject:
         """
-        Create a new subject.
+        Create a new subject for the current user.
         
         Args:
             data: Validated subject creation data
@@ -62,14 +91,15 @@ class SubjectService:
             Created subject
             
         Raises:
-            ValueError: If a subject with the same name already exists
+            ValueError: If a subject with the same name already exists for this user
         """
-        # Check for existing subject with same name (case-insensitive)
+        # Check for existing subject with same name for this user (case-insensitive)
         existing = self.get_by_name(data.name)
         if existing:
             raise ValueError(f"A subject with name '{data.name}' already exists")
 
         subject = Subject(
+            user_id=self.user.id,
             name=data.name.strip(),
             start_date=data.start_date,
             schedule_type=data.schedule_type,
@@ -90,7 +120,7 @@ class SubjectService:
             data: Partial update data (only provided fields are updated)
             
         Returns:
-            Updated subject, or None if not found
+            Updated subject, or None if not found or not owned by user
             
         Raises:
             ValueError: If new name conflicts with existing subject
@@ -145,7 +175,7 @@ class SubjectService:
             subject_id: ID of subject to delete
             
         Returns:
-            True if deleted, False if not found
+            True if deleted, False if not found or not owned by user
         """
         subject = self.get_by_id(subject_id)
         if not subject:

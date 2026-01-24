@@ -2,19 +2,23 @@
 Subject model - represents a study subject for active recall tracking.
 
 A Subject has:
-- A unique name (case-insensitive)
+- A unique name per user (case-insensitive)
 - A start date (when studying began)
 - A schedule type (DEFAULT or CUSTOM)
 - Optional custom intervals for CUSTOM schedule type
+- An owner (user_id foreign key)
 """
 
 import uuid
 import enum
 from datetime import datetime, date
-from typing import Optional
-from sqlalchemy import String, Date, DateTime, Enum, JSON, func
-from sqlalchemy.orm import Mapped, mapped_column
+from typing import Optional, TYPE_CHECKING
+from sqlalchemy import String, Date, DateTime, Enum, JSON, ForeignKey, func, Index
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
+
+if TYPE_CHECKING:
+    from app.models.user import User
 
 
 class ScheduleType(str, enum.Enum):
@@ -37,7 +41,8 @@ class Subject(Base):
     
     Attributes:
         id: UUID primary key (stored as string for SQLite compatibility)
-        name: Unique subject name (case-insensitive uniqueness enforced at app level)
+        user_id: Foreign key to the owning user
+        name: Subject name (unique per user, case-insensitive enforced at app level)
         start_date: The date when studying this subject began
         schedule_type: Either DEFAULT or CUSTOM
         custom_intervals_days: JSON array of integers (only used when schedule_type=CUSTOM)
@@ -45,13 +50,29 @@ class Subject(Base):
         updated_at: Timestamp when record was last updated
     """
     __tablename__ = "subjects"
+    
+    # Table-level constraints
+    __table_args__ = (
+        # Index for efficient user-scoped queries
+        Index('ix_subjects_user_id', 'user_id'),
+        # Composite index for user+name lookups (uniqueness enforced at app level)
+        Index('ix_subjects_user_id_name', 'user_id', 'name'),
+    )
 
     id: Mapped[str] = mapped_column(
         String(36), 
         primary_key=True, 
         default=lambda: str(uuid.uuid4())
     )
-    name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    
+    # Foreign key to user - every subject belongs to exactly one user
+    user_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False
+    )
+    
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     schedule_type: Mapped[ScheduleType] = mapped_column(
         Enum(ScheduleType), 
@@ -74,6 +95,9 @@ class Subject(Base):
         server_default=func.now(),
         onupdate=func.now()
     )
+    
+    # Relationship to user
+    user: Mapped["User"] = relationship("User", back_populates="subjects")
 
     def __repr__(self) -> str:
-        return f"<Subject(id={self.id}, name={self.name}, schedule_type={self.schedule_type})>"
+        return f"<Subject(id={self.id}, name={self.name}, user_id={self.user_id})>"

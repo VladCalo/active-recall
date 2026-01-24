@@ -2,38 +2,58 @@
 
 A production-quality web application for tracking study subjects and generating daily review schedules using spaced repetition / active recall principles.
 
+**Features secure multi-user authentication**, per-user data isolation, and production-ready security hardening.
+
 ## Table of Contents
 
 - [Overview](#overview)
 - [Features](#features)
+- [Security Features](#security-features)
 - [Architecture](#architecture)
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
 - [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Quick Start](#quick-start)
-  - [Manual Setup](#manual-setup)
 - [Running the Application](#running-the-application)
 - [API Documentation](#api-documentation)
 - [Testing](#testing)
+- [Production Readiness](#production-readiness)
 - [Deployment](#deployment)
 - [Code Walkthrough](#code-walkthrough)
-- [Contributing](#contributing)
 
 ## Overview
 
-Active Recall Monitor helps you implement spaced repetition for your studies. You add subjects (e.g., "Cardiology", "Pharmacology"), set a start date, and the app automatically calculates when each subject needs to be reviewed based on optimal memory retention intervals.
+Active Recall Monitor helps you implement spaced repetition for your studies. Each user can:
+- Add subjects (e.g., "Cardiology", "Pharmacology")
+- Set a start date and review schedule
+- See which subjects need review today
+- Use default intervals `[1, 3, 7, 14, 30, 60, 120, 180]` days or create custom schedules
 
-The default interval schedule is: **1, 3, 7, 14, 30, 60, 120, 180 days** — based on proven spaced repetition research. You can also create custom schedules.
+**Multi-user system**: Each user's data is completely isolated. Users can only see and manage their own subjects.
 
 ## Features
 
-- **Dashboard**: Shows subjects due for review today (based on Europe/Bucharest timezone)
+- **Secure Authentication**: Register/login with JWT tokens and Argon2 password hashing
+- **Multi-User Support**: Complete data isolation between users
+- **Dashboard**: Shows subjects due for review today (Europe/Bucharest timezone)
 - **Subject Management**: Add, edit, and delete study subjects
 - **Flexible Scheduling**: Use default intervals or create custom review schedules
 - **Next Due Calculation**: See when each subject needs to be reviewed next
 - **Beautiful UI**: Modern, responsive design with shadcn/ui components
 - **API Documentation**: Interactive Swagger docs at `/docs`
+
+## Security Features
+
+| Feature | Implementation |
+|---------|---------------|
+| Password Hashing | Argon2 (memory-hard, GPU-resistant) |
+| Authentication | JWT access tokens (15min) + refresh tokens (7 days) |
+| Token Storage | Access tokens in memory, refresh in httpOnly cookies |
+| CORS | Configurable allowed origins |
+| Rate Limiting | Auth endpoints rate limited (5/min default) |
+| User Isolation | All queries scoped by authenticated user |
+| Security Headers | X-Content-Type-Options, X-Frame-Options, X-XSS-Protection |
+| Input Validation | Pydantic validation on all inputs |
+| Error Handling | Generic errors in production (no stack traces leaked) |
 
 ## Architecture
 
@@ -44,17 +64,8 @@ The default interval schedule is: **1, 3, 7, 14, 30, 60, 120, 180 days** — bas
 │  (Vite + TS)    │ HTTP │  (Python 3.11)  │      │  (SQLAlchemy)   │
 │                 │      │                 │      │                 │
 └─────────────────┘      └─────────────────┘      └─────────────────┘
-     Port 5173                Port 8000              app.db file
+     Port 5173                Port 7070              app.db file
 ```
-
-### Data Flow
-
-1. User opens the Dashboard
-2. Frontend calls `GET /api/reviews/today?tz=Europe/Bucharest`
-3. Backend computes today's date in the specified timezone
-4. Backend queries all subjects and computes due dates
-5. Subjects where `start_date + interval == today` are returned
-6. Frontend displays the review cards
 
 ## Tech Stack
 
@@ -65,6 +76,9 @@ The default interval schedule is: **1, 3, 7, 14, 30, 60, 120, 180 days** — bas
 - **SQLAlchemy 2.0** - ORM with modern type annotations
 - **Alembic** - Database migrations
 - **Pydantic** - Data validation
+- **Argon2** - Password hashing
+- **python-jose** - JWT tokens
+- **SlowAPI** - Rate limiting
 - **Pytest** - Testing framework
 
 ### Frontend
@@ -74,7 +88,7 @@ The default interval schedule is: **1, 3, 7, 14, 30, 60, 120, 180 days** — bas
 - **TailwindCSS** - Utility-first CSS
 - **shadcn/ui** - Beautiful UI components
 - **Lucide React** - Icon library
-- **Axios** - HTTP client
+- **Axios** - HTTP client with interceptors
 - **React Router** - Client-side routing
 
 ## Project Structure
@@ -84,49 +98,55 @@ active-recall/
 ├── backend/                    # Python FastAPI application
 │   ├── app/
 │   │   ├── api/               # API route handlers
-│   │   │   ├── health.py      # Health check endpoint
-│   │   │   ├── subjects.py    # Subject CRUD endpoints
-│   │   │   └── reviews.py     # Review query endpoints
+│   │   │   ├── auth.py        # Auth endpoints (register/login/logout)
+│   │   │   ├── health.py      # Health check
+│   │   │   ├── subjects.py    # Subject CRUD (authenticated)
+│   │   │   └── reviews.py     # Review queries (authenticated)
+│   │   ├── core/              # Security and dependencies
+│   │   │   ├── security.py    # Password hashing, JWT functions
+│   │   │   └── deps.py        # FastAPI dependencies (get_current_user)
 │   │   ├── models/            # SQLAlchemy ORM models
-│   │   │   └── subject.py     # Subject model with ScheduleType enum
+│   │   │   ├── user.py        # User model
+│   │   │   └── subject.py     # Subject model (with user_id FK)
 │   │   ├── schemas/           # Pydantic validation schemas
-│   │   │   ├── subject.py     # Subject request/response schemas
-│   │   │   └── review.py      # Review response schemas
+│   │   │   ├── auth.py        # Auth request/response schemas
+│   │   │   ├── subject.py     # Subject schemas
+│   │   │   └── review.py      # Review schemas
 │   │   ├── services/          # Business logic layer
-│   │   │   ├── subject_service.py  # Subject CRUD operations
-│   │   │   └── review_service.py   # Due date calculations
-│   │   ├── config.py          # Configuration management
+│   │   │   ├── auth_service.py    # Auth operations
+│   │   │   ├── subject_service.py # Subject CRUD (user-scoped)
+│   │   │   └── review_service.py  # Due date calculations
+│   │   ├── config.py          # Configuration (env vars)
 │   │   ├── database.py        # Database setup
-│   │   └── main.py            # FastAPI application entry
+│   │   └── main.py            # FastAPI application
 │   ├── alembic/               # Database migrations
 │   ├── tests/                 # Pytest test suite
+│   │   ├── test_auth.py       # Auth endpoint tests
+│   │   ├── test_user_isolation.py # Security isolation tests
+│   │   └── ...
 │   ├── requirements.txt       # Python dependencies
-│   ├── seed.py               # Sample data script
 │   └── Dockerfile            # Backend container
 │
 ├── frontend/                  # React application
 │   ├── src/
+│   │   ├── contexts/
+│   │   │   └── AuthContext.tsx    # Auth state management
 │   │   ├── components/
-│   │   │   ├── ui/           # shadcn/ui components
-│   │   │   ├── Layout.tsx    # Main layout with nav
-│   │   │   └── SubjectDialog.tsx  # Add/edit modal
+│   │   │   ├── ProtectedRoute.tsx # Route guard
+│   │   │   └── ...
 │   │   ├── pages/
-│   │   │   ├── Dashboard.tsx # Today's reviews page
-│   │   │   └── Subjects.tsx  # Subject management page
-│   │   ├── hooks/
-│   │   │   └── use-toast.ts  # Toast notification hook
-│   │   ├── lib/
-│   │   │   ├── api.ts        # API client functions
-│   │   │   └── utils.ts      # Utility functions
-│   │   ├── App.tsx           # Root component with routing
-│   │   ├── main.tsx          # Entry point
-│   │   └── index.css         # Global styles
-│   ├── package.json          # Node dependencies
-│   └── Dockerfile            # Frontend container
+│   │   │   ├── Login.tsx      # Login page
+│   │   │   ├── Register.tsx   # Registration page
+│   │   │   ├── Dashboard.tsx  # Today's reviews
+│   │   │   └── Subjects.tsx   # Subject management
+│   │   └── lib/
+│   │       └── api.ts         # API client with auth
+│   ├── package.json
+│   └── Dockerfile
 │
-├── docker-compose.yml        # Container orchestration
-├── run.sh                    # Development runner script
-└── README.md                 # This file
+├── docker-compose.yml
+├── run.sh                    # Development runner
+└── README.md
 ```
 
 ## Getting Started
@@ -139,10 +159,8 @@ active-recall/
 
 ### Quick Start
 
-The fastest way to get running:
-
 ```bash
-# Clone the repository (if needed)
+# Clone and enter the repository
 cd active-recall
 
 # Make the run script executable
@@ -157,35 +175,30 @@ chmod +x run.sh
 
 Then open:
 - **Frontend**: http://localhost:5173
-- **Backend API docs**: http://localhost:8000/docs
+- **Backend API docs**: http://localhost:7070/docs
 
 ### Manual Setup
-
-If you prefer manual setup:
 
 #### Backend Setup
 
 ```bash
-# Navigate to backend
 cd backend
 
 # Create virtual environment
 python3 -m venv venv
-
-# Activate virtual environment
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
 # Install dependencies
+pip install --upgrade pip
 pip install -r requirements.txt
 
-# Run the server (tables created automatically)
-uvicorn app.main:app --reload --port 8000
+# Run the server on port 7070
+uvicorn app.main:app --reload --host 0.0.0.0 --port 7070
 ```
 
 #### Frontend Setup
 
 ```bash
-# Navigate to frontend
 cd frontend
 
 # Install dependencies
@@ -201,9 +214,10 @@ npm run dev
 
 **Option 1: Using run.sh (recommended)**
 ```bash
-./run.sh           # Runs both backend and frontend
-./run.sh backend   # Runs only backend
-./run.sh frontend  # Runs only frontend
+./run.sh           # Runs both backend (7070) and frontend (5173)
+./run.sh backend   # Runs only backend on port 7070
+./run.sh frontend  # Runs only frontend on port 5173
+./run.sh setup     # Install all dependencies
 ```
 
 **Option 2: Manual (two terminals)**
@@ -212,7 +226,7 @@ Terminal 1 - Backend:
 ```bash
 cd backend
 source venv/bin/activate
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 7070
 ```
 
 Terminal 2 - Frontend:
@@ -224,88 +238,74 @@ npm run dev
 ### Production Mode (Docker)
 
 ```bash
-# Build and run with Docker Compose
+# Set required environment variable
+export JWT_SECRET_KEY=$(python -c "import secrets; print(secrets.token_urlsafe(64))")
+
+# Build and run
 docker-compose up --build
-
-# Or run in detached mode
-docker-compose up -d --build
-```
-
-### Seeding Sample Data
-
-```bash
-cd backend
-source venv/bin/activate
-python seed.py
 ```
 
 ## API Documentation
 
-Interactive API documentation is available at:
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
+Interactive API documentation: http://localhost:7070/docs
 
-### Key Endpoints
+### Auth Endpoints
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| POST | `/api/auth/register` | Register new user | No |
+| POST | `/api/auth/login` | Login | No |
+| POST | `/api/auth/logout` | Logout | No |
+| GET | `/api/auth/me` | Get current user | Yes |
+| POST | `/api/auth/refresh` | Refresh tokens | Cookie |
+
+### Protected Endpoints (require authentication)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/health` | Health check |
-| GET | `/api/subjects` | List all subjects |
+| GET | `/api/subjects` | List user's subjects |
 | POST | `/api/subjects` | Create a subject |
 | GET | `/api/subjects/{id}` | Get a subject |
 | PUT | `/api/subjects/{id}` | Update a subject |
 | DELETE | `/api/subjects/{id}` | Delete a subject |
-| GET | `/api/reviews/today?tz=Europe/Bucharest` | Get today's reviews |
-| GET | `/api/reviews/upcoming?days=7` | Get upcoming reviews |
+| GET | `/api/reviews/today?tz=...` | Today's reviews |
+| GET | `/api/reviews/upcoming?days=7` | Upcoming reviews |
 
 ### Sample cURL Commands
 
 ```bash
-# Health check
-curl http://localhost:8000/api/health
-
-# Create a subject
-curl -X POST http://localhost:8000/api/subjects \
+# Register a new user
+curl -X POST http://localhost:7070/api/auth/register \
   -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com", "password": "securepassword123"}'
+
+# Login (save the access_token)
+curl -X POST http://localhost:7070/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com", "password": "securepassword123"}'
+
+# Create a subject (use token from login)
+curl -X POST http://localhost:7070/api/subjects \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -d '{
     "name": "Cardiology",
     "start_date": "2026-01-25",
     "schedule_type": "DEFAULT"
   }'
 
-# Create a subject with custom schedule
-curl -X POST http://localhost:8000/api/subjects \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Anatomy",
-    "start_date": "2026-01-25",
-    "schedule_type": "CUSTOM",
-    "custom_intervals_days": [1, 2, 4, 7, 14, 28]
-  }'
+# Get today's reviews
+curl "http://localhost:7070/api/reviews/today?tz=Europe/Bucharest" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 
 # List all subjects
-curl http://localhost:8000/api/subjects
-
-# Get today's reviews
-curl "http://localhost:8000/api/reviews/today?tz=Europe/Bucharest"
-
-# Get upcoming reviews for 14 days
-curl "http://localhost:8000/api/reviews/upcoming?days=14&tz=Europe/Bucharest"
-
-# Update a subject
-curl -X PUT http://localhost:8000/api/subjects/{id} \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Cardiology Updated"
-  }'
-
-# Delete a subject
-curl -X DELETE http://localhost:8000/api/subjects/{id}
+curl http://localhost:7070/api/subjects \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
 ## Testing
 
-### Backend Tests
+### Run All Tests
 
 ```bash
 cd backend
@@ -318,30 +318,81 @@ pytest
 pytest -v
 
 # Run specific test file
-pytest tests/test_review_service.py
+pytest tests/test_auth.py
+pytest tests/test_user_isolation.py
 
 # Run with coverage
 pytest --cov=app
 ```
 
-### Frontend Lint
+### Test Categories
 
-```bash
-cd frontend
-npm run lint
-npm run build  # Type check + build
-```
+- **test_auth.py**: Authentication (register, login, me, logout)
+- **test_user_isolation.py**: Security - users can't access each other's data
+- **test_api_subjects.py**: Subject CRUD operations
+- **test_api_reviews.py**: Review query endpoints
+- **test_review_service.py**: Due date calculation logic
+
+## Production Readiness
+
+### What's Safe Now
+
+- **Password Security**: Argon2 with memory-hard parameters
+- **Token Security**: Short-lived access tokens (15min), httpOnly refresh cookies
+- **Input Validation**: All inputs validated with Pydantic
+- **User Isolation**: Queries scoped by user, 404 for unauthorized access
+- **Rate Limiting**: Auth endpoints protected against brute force
+- **Security Headers**: Basic security headers included
+- **Error Handling**: Generic errors in production mode
+
+### What to Change for Production
+
+| Setting | Development | Production |
+|---------|-------------|------------|
+| `JWT_SECRET_KEY` | Auto-generated (random) | Set via env var (required!) |
+| `ENVIRONMENT` | `development` | `production` |
+| `DEBUG` | `true` | `false` |
+| `COOKIE_SECURE` | `false` | `true` (requires HTTPS) |
+| `CORS_ORIGINS` | `localhost` | Your actual domain(s) |
+| `DATABASE_URL` | SQLite file | PostgreSQL recommended |
+
+### Production Deployment Checklist
+
+1. **Generate a secure JWT secret**:
+   ```bash
+   python -c "import secrets; print(secrets.token_urlsafe(64))"
+   ```
+
+2. **Set environment variables**:
+   ```bash
+   export JWT_SECRET_KEY="your-64-char-secret"
+   export ENVIRONMENT="production"
+   export DEBUG="false"
+   export COOKIE_SECURE="true"
+   export CORS_ORIGINS='["https://yourdomain.com"]'
+   ```
+
+3. **Use HTTPS**: Required for secure cookies
+
+4. **Use a reverse proxy**: Nginx or Caddy recommended
+
+5. **Switch to PostgreSQL** for production:
+   ```bash
+   export DATABASE_URL="postgresql://user:pass@host:5432/dbname"
+   ```
+
+6. **Run migrations**:
+   ```bash
+   alembic upgrade head
+   ```
 
 ## Deployment
 
 ### Docker on Raspberry Pi 5
 
-The Docker images are built for multi-arch support (amd64, arm64).
-
 ```bash
-# On your RPi5
-git clone <repo-url>
-cd active-recall
+# Generate JWT secret
+export JWT_SECRET_KEY=$(python -c "import secrets; print(secrets.token_urlsafe(64))")
 
 # Build and run
 docker-compose up -d --build
@@ -351,120 +402,80 @@ docker-compose up -d --build
 
 ### Switching to PostgreSQL
 
-1. Update `backend/.env`:
-```env
-DATABASE_URL=postgresql://user:password@localhost:5432/active_recall
-```
+1. Install psycopg2:
+   ```bash
+   pip install psycopg2-binary
+   ```
 
-2. Install psycopg2:
-```bash
-pip install psycopg2-binary
-```
+2. Update environment:
+   ```bash
+   export DATABASE_URL="postgresql://user:password@localhost:5432/active_recall"
+   ```
 
-3. Update `backend/app/database.py` to remove SQLite-specific config:
-```python
-# Remove: connect_args={"check_same_thread": False}
-engine = create_engine(settings.database_url)
-```
-
-4. Run migrations:
-```bash
-alembic upgrade head
-```
+3. Run migrations:
+   ```bash
+   alembic upgrade head
+   ```
 
 ## Code Walkthrough
 
 ### For New Developers
 
-Here's how to understand the codebase:
+#### Authentication Flow
 
-#### Backend Architecture
+1. **Registration** (`POST /api/auth/register`):
+   - Validate email/password
+   - Hash password with Argon2
+   - Create user in database
+   - Generate JWT access + refresh tokens
+   - Return access token in body, refresh in httpOnly cookie
 
-1. **Entry Point**: `backend/app/main.py`
-   - Creates FastAPI app
-   - Configures CORS
-   - Includes routers
+2. **Login** (`POST /api/auth/login`):
+   - Validate credentials
+   - Small delay on failure (brute force protection)
+   - Update last_login_at
+   - Return tokens same as registration
 
-2. **Configuration**: `backend/app/config.py`
-   - Uses pydantic-settings for type-safe config
-   - Loads from environment variables
+3. **Protected Request**:
+   - Frontend sends `Authorization: Bearer <token>` header
+   - `get_current_user` dependency validates token
+   - Extracts user_id from JWT `sub` claim
+   - Loads user from database
+   - All queries scoped to that user
 
-3. **Database**: `backend/app/database.py`
-   - SQLAlchemy engine and session setup
-   - `get_db()` dependency for FastAPI routes
+4. **Token Refresh** (`POST /api/auth/refresh`):
+   - Uses refresh token from httpOnly cookie
+   - Validates token type is "refresh"
+   - Issues new access + refresh tokens
 
-4. **Models**: `backend/app/models/subject.py`
-   - SQLAlchemy ORM model
-   - `ScheduleType` enum (DEFAULT, CUSTOM)
+#### User Data Isolation
 
-5. **Schemas**: `backend/app/schemas/`
-   - Pydantic models for request/response validation
-   - `SubjectCreate`, `SubjectUpdate`, `SubjectResponse`
+All services take `User` as constructor argument:
 
-6. **Services**: `backend/app/services/`
-   - Business logic separate from routes
-   - `SubjectService`: CRUD operations
-   - `ReviewService`: Due date calculations
-
-7. **API Routes**: `backend/app/api/`
-   - REST endpoints
-   - Dependency injection for services
-
-#### Frontend Architecture
-
-1. **Entry Point**: `frontend/src/main.tsx`
-   - React DOM render
-   - Router setup
-
-2. **App Component**: `frontend/src/App.tsx`
-   - Route definitions
-   - Layout wrapper
-
-3. **Pages**: `frontend/src/pages/`
-   - `Dashboard.tsx`: Today's reviews
-   - `Subjects.tsx`: CRUD interface
-
-4. **Components**: `frontend/src/components/`
-   - `Layout.tsx`: Navigation header
-   - `SubjectDialog.tsx`: Add/edit modal
-   - `ui/`: shadcn/ui components
-
-5. **API Client**: `frontend/src/lib/api.ts`
-   - Typed API functions
-   - Axios configuration
-
-#### Key Concepts
-
-**Due Date Calculation** (in `ReviewService`):
 ```python
-def compute_due_dates(self, subject):
-    # For each interval, add it to the start date
-    # Example: start=Jan 25, interval=3 → due=Jan 28
-    due_dates = []
-    for interval in self.get_intervals(subject):
-        due_date = subject.start_date + timedelta(days=interval)
-        due_dates.append(due_date)
-    return sorted(due_dates)
+class SubjectService:
+    def __init__(self, db: Session, user: User):
+        self.db = db
+        self.user = user
+
+    def get_all(self) -> list[Subject]:
+        # Automatically scoped to user
+        return self.db.query(Subject).filter(
+            Subject.user_id == self.user.id
+        ).all()
 ```
 
-**Timezone Handling**:
-```python
-def get_today(self, timezone):
-    # Always compute "today" in the user's timezone
-    tz = ZoneInfo(timezone)
-    return datetime.now(tz).date()
-```
+Even if an attacker guesses a subject ID, they get 404 (not 403) to avoid confirming the resource exists.
 
-## Contributing
+#### Key Files to Understand
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Make your changes
-4. Run tests: `pytest` and `npm run lint`
-5. Commit: `git commit -m 'Add amazing feature'`
-6. Push: `git push origin feature/amazing-feature`
-7. Open a Pull Request
+1. **`app/core/security.py`**: Password hashing, JWT creation/verification
+2. **`app/core/deps.py`**: FastAPI dependencies for auth
+3. **`app/services/auth_service.py`**: Registration, login logic
+4. **`app/api/auth.py`**: Auth endpoints
+5. **`frontend/src/contexts/AuthContext.tsx`**: React auth state
+6. **`frontend/src/lib/api.ts`**: Axios with token refresh interceptor
 
 ---
 
-Built with care for effective learning through spaced repetition.
+Built with security-first principles for reliable study tracking.

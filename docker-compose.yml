@@ -7,7 +7,7 @@
 #   Production:  docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 #
 # Services:
-#   - backend:  FastAPI application on port 8000
+#   - backend:  FastAPI application on port 7070
 #   - frontend: React app served by nginx on port 80/5173
 
 version: '3.8'
@@ -22,16 +22,20 @@ services:
       dockerfile: Dockerfile
     container_name: active-recall-backend
     ports:
-      - "8000:8000"
+      - "7070:7070"
     environment:
+      - ENVIRONMENT=production
       - DEBUG=false
       - DATABASE_URL=sqlite:///./app.db
       - DEFAULT_TIMEZONE=Europe/Bucharest
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
+      - COOKIE_SECURE=true
+      - CORS_ORIGINS=["http://localhost:5173"]
     volumes:
       # Persist SQLite database
       - backend_data:/app
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7070/api/health')"]
       interval: 30s
       timeout: 10s
       retries: 3

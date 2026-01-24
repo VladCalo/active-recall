@@ -2,6 +2,8 @@
 Review API endpoints.
 
 Handles review scheduling queries - what's due today, upcoming reviews, etc.
+
+Security: All endpoints require authentication and are scoped to the current user.
 """
 
 from datetime import timedelta
@@ -9,6 +11,8 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.core.deps import get_current_user
+from app.models.user import User
 from app.services.review_service import ReviewService
 from app.schemas.subject import SubjectWithNextDue
 from app.schemas.review import TodayReviewsResponse, UpcomingReviewsResponse
@@ -19,9 +23,12 @@ router = APIRouter(prefix="/api/reviews", tags=["reviews"])
 settings = get_settings()
 
 
-def get_review_service(db: Session = Depends(get_db)) -> ReviewService:
-    """Dependency to get ReviewService instance."""
-    return ReviewService(db)
+def get_review_service(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ReviewService:
+    """Dependency to get ReviewService instance scoped to current user."""
+    return ReviewService(db, current_user)
 
 
 @router.get("/today", response_model=TodayReviewsResponse)
@@ -34,7 +41,7 @@ def get_today_reviews(
     review_service: ReviewService = Depends(get_review_service),
 ):
     """
-    Get subjects due for review today.
+    Get subjects due for review today for the current user.
     
     Args:
         tz: Timezone string (e.g., 'Europe/Bucharest')
@@ -86,7 +93,7 @@ def get_upcoming_reviews(
     review_service: ReviewService = Depends(get_review_service),
 ):
     """
-    Get subjects due for review in the upcoming N days.
+    Get subjects due for review in the upcoming N days for the current user.
     
     Args:
         days: Number of days to look ahead (1-365)

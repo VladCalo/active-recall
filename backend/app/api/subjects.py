@@ -2,12 +2,17 @@
 Subject API endpoints.
 
 Handles CRUD operations for study subjects.
+
+Security: All endpoints require authentication and are scoped to the current user.
+Users can only access their own subjects.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.core.deps import get_current_user
+from app.models.user import User
 from app.services.subject_service import SubjectService
 from app.services.review_service import ReviewService
 from app.schemas.subject import (
@@ -20,14 +25,20 @@ from app.schemas.subject import (
 router = APIRouter(prefix="/api/subjects", tags=["subjects"])
 
 
-def get_subject_service(db: Session = Depends(get_db)) -> SubjectService:
-    """Dependency to get SubjectService instance."""
-    return SubjectService(db)
+def get_subject_service(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> SubjectService:
+    """Dependency to get SubjectService instance scoped to current user."""
+    return SubjectService(db, current_user)
 
 
-def get_review_service(db: Session = Depends(get_db)) -> ReviewService:
-    """Dependency to get ReviewService instance."""
-    return ReviewService(db)
+def get_review_service(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ReviewService:
+    """Dependency to get ReviewService instance scoped to current user."""
+    return ReviewService(db, current_user)
 
 
 @router.get("", response_model=list[SubjectWithNextDue])
@@ -36,7 +47,7 @@ def list_subjects(
     review_service: ReviewService = Depends(get_review_service),
 ):
     """
-    List all subjects.
+    List all subjects for the current user.
     
     Returns subjects with their computed next due date and active intervals.
     """
@@ -69,7 +80,7 @@ def create_subject(
     review_service: ReviewService = Depends(get_review_service),
 ):
     """
-    Create a new subject.
+    Create a new subject for the current user.
     
     Args:
         data: Subject creation data
@@ -78,7 +89,7 @@ def create_subject(
         Created subject with next due date
         
     Raises:
-        400: If subject name already exists
+        400: If subject name already exists for this user
         422: If validation fails
     """
     try:
@@ -121,13 +132,13 @@ def get_subject(
         Subject with next due date
         
     Raises:
-        404: If subject not found
+        404: If subject not found or not owned by current user
     """
     subject = subject_service.get_by_id(subject_id)
     if not subject:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Subject with ID '{subject_id}' not found"
+            detail=f"Subject not found"
         )
     
     next_due = review_service.get_next_due_date(subject)
@@ -165,7 +176,7 @@ def update_subject(
         
     Raises:
         400: If name conflicts with existing subject
-        404: If subject not found
+        404: If subject not found or not owned by current user
         422: If validation fails
     """
     try:
@@ -179,7 +190,7 @@ def update_subject(
     if not subject:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Subject with ID '{subject_id}' not found"
+            detail=f"Subject not found"
         )
     
     next_due = review_service.get_next_due_date(subject)
@@ -210,11 +221,11 @@ def delete_subject(
         subject_id: UUID of the subject
         
     Raises:
-        404: If subject not found
+        404: If subject not found or not owned by current user
     """
     deleted = subject_service.delete(subject_id)
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Subject with ID '{subject_id}' not found"
+            detail=f"Subject not found"
         )

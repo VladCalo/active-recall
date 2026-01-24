@@ -14,6 +14,14 @@ from app.schemas.subject import (
     SubjectWithNextDue,
 )
 from app.schemas.review import TodayReviewsResponse, UpcomingReviewsResponse
+from app.schemas.auth import (
+    UserRegister,
+    UserLogin,
+    UserResponse,
+    TokenResponse,
+    AuthResponse,
+    MessageResponse,
+)
 
 __all__ = [
     "SubjectCreate",
@@ -22,4 +30,10 @@ __all__ = [
     "SubjectWithNextDue",
     "TodayReviewsResponse",
     "UpcomingReviewsResponse",
+    "UserRegister",
+    "UserLogin",
+    "UserResponse",
+    "TokenResponse",
+    "AuthResponse",
+    "MessageResponse",
 ]

@@ -92,8 +92,8 @@ DATA_DIR=${DATA_DIR}
 COOKIE_SECURE=false
 
 # CORS - Add your RPi's IP/hostname here
-# Example: CORS_ORIGINS=["http://192.168.1.100","http://raspberrypi.local"]
-CORS_ORIGINS=["http://localhost","http://127.0.0.1"]
+# Example: CORS_ORIGINS='["http://192.168.1.100","http://raspberrypi.local"]'
+CORS_ORIGINS='["http://localhost","http://127.0.0.1"]'
 EOF
     
     chmod 600 "${ENV_FILE}"

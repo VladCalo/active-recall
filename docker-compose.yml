@@ -1,0 +1,58 @@
+# Active Recall Monitor - Docker Compose Configuration
+#
+# This file orchestrates the backend and frontend services.
+# 
+# Usage:
+#   Development: docker-compose up --build
+#   Production:  docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Services:
+#   - backend:  FastAPI application on port 8000
+#   - frontend: React app served by nginx on port 80/5173
+
+version: '3.8'
+
+services:
+  # ==========================================================================
+  # Backend Service - FastAPI + SQLite
+  # ==========================================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: active-recall-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=false
+      - DATABASE_URL=sqlite:///./app.db
+      - DEFAULT_TIMEZONE=Europe/Bucharest
+    volumes:
+      # Persist SQLite database
+      - backend_data:/app
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Frontend Service - React + Nginx
+  # ==========================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: active-recall-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  backend_data:
+    driver: local

@@ -1,0 +1,129 @@
+# Active Recall Monitor - Git Ignore File
+
+# =============================================================================
+# Python / Backend
+# =============================================================================
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+backend/venv/
+venv/
+ENV/
+env/
+.venv/
+
+# Distribution / packaging
+*.egg-info/
+*.egg
+dist/
+build/
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# mypy
+.mypy_cache/
+
+# SQLite database files
+*.db
+*.sqlite3
+
+# Environment files with secrets
+.env
+!.env.example
+
+# =============================================================================
+# Node / Frontend
+# =============================================================================
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+frontend/dist/
+frontend/build/
+
+# Vite
+*.local
+
+# Testing
+coverage/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =============================================================================
+# IDE / Editor
+# =============================================================================
+
+# VS Code
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json.example
+
+# JetBrains (PyCharm, WebStorm, etc.)
+.idea/
+*.iml
+
+# Sublime Text
+*.sublime-workspace
+*.sublime-project
+
+# Vim
+*.swp
+*.swo
+*~
+
+# =============================================================================
+# Operating System
+# =============================================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# =============================================================================
+# Docker
+# =============================================================================
+
+# Docker Compose override (local development)
+docker-compose.override.yml
+
+# =============================================================================
+# Misc
+# =============================================================================
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# Log files
+*.log
+logs/

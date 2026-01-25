@@ -36,7 +36,7 @@ class UserRegister(BaseModel):
 
 class UserLogin(BaseModel):
     """Schema for user login."""
-    email: EmailStr = Field(..., description="User email address")
+    email: str = Field(..., description="User email address or username (for admin)")
     password: str = Field(
         ..., 
         max_length=128,  # Prevent DoS with very long passwords
@@ -50,7 +50,7 @@ class UserLogin(BaseModel):
     @field_validator('email')
     @classmethod
     def normalize_email(cls, v: str) -> str:
-        """Normalize email to lowercase."""
+        """Normalize to lowercase (works for both email and username)."""
         return v.lower().strip()
 
 

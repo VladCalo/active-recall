@@ -41,6 +41,29 @@ def get_review_service(
     return ReviewService(db, current_user)
 
 
+def build_subject_response(subject, review_service: ReviewService) -> SubjectWithNextDue:
+    """Build SubjectWithNextDue response with all computed fields."""
+    next_due = review_service.get_next_due_date(subject)
+    intervals = review_service.get_intervals(subject)
+    total_revisions = review_service.get_total_revisions(subject)
+    is_completed = review_service.is_completed(subject)
+    
+    return SubjectWithNextDue(
+        id=subject.id,
+        name=subject.name,
+        start_date=subject.start_date,
+        schedule_type=subject.schedule_type,
+        custom_intervals_days=subject.custom_intervals_days,
+        created_at=subject.created_at,
+        updated_at=subject.updated_at,
+        next_due_date=next_due,
+        intervals=intervals,
+        revision_number=None,  # Not applicable when not viewing a specific date
+        total_revisions=total_revisions,
+        is_completed=is_completed,
+    )
+
+
 @router.get("", response_model=list[SubjectWithNextDue])
 def list_subjects(
     subject_service: SubjectService = Depends(get_subject_service),
@@ -52,25 +75,7 @@ def list_subjects(
     Returns subjects with their computed next due date and active intervals.
     """
     subjects = subject_service.get_all()
-    result = []
-    
-    for subject in subjects:
-        next_due = review_service.get_next_due_date(subject)
-        intervals = review_service.get_intervals(subject)
-        
-        result.append(SubjectWithNextDue(
-            id=subject.id,
-            name=subject.name,
-            start_date=subject.start_date,
-            schedule_type=subject.schedule_type,
-            custom_intervals_days=subject.custom_intervals_days,
-            created_at=subject.created_at,
-            updated_at=subject.updated_at,
-            next_due_date=next_due,
-            intervals=intervals,
-        ))
-    
-    return result
+    return [build_subject_response(s, review_service) for s in subjects]
 
 
 @router.post("", response_model=SubjectWithNextDue, status_code=status.HTTP_201_CREATED)
@@ -100,20 +105,7 @@ def create_subject(
             detail=str(e)
         )
     
-    next_due = review_service.get_next_due_date(subject)
-    intervals = review_service.get_intervals(subject)
-    
-    return SubjectWithNextDue(
-        id=subject.id,
-        name=subject.name,
-        start_date=subject.start_date,
-        schedule_type=subject.schedule_type,
-        custom_intervals_days=subject.custom_intervals_days,
-        created_at=subject.created_at,
-        updated_at=subject.updated_at,
-        next_due_date=next_due,
-        intervals=intervals,
-    )
+    return build_subject_response(subject, review_service)
 
 
 @router.get("/{subject_id}", response_model=SubjectWithNextDue)
@@ -141,20 +133,7 @@ def get_subject(
             detail=f"Subject not found"
         )
     
-    next_due = review_service.get_next_due_date(subject)
-    intervals = review_service.get_intervals(subject)
-    
-    return SubjectWithNextDue(
-        id=subject.id,
-        name=subject.name,
-        start_date=subject.start_date,
-        schedule_type=subject.schedule_type,
-        custom_intervals_days=subject.custom_intervals_days,
-        created_at=subject.created_at,
-        updated_at=subject.updated_at,
-        next_due_date=next_due,
-        intervals=intervals,
-    )
+    return build_subject_response(subject, review_service)
 
 
 @router.put("/{subject_id}", response_model=SubjectWithNextDue)
@@ -193,20 +172,7 @@ def update_subject(
             detail=f"Subject not found"
         )
     
-    next_due = review_service.get_next_due_date(subject)
-    intervals = review_service.get_intervals(subject)
-    
-    return SubjectWithNextDue(
-        id=subject.id,
-        name=subject.name,
-        start_date=subject.start_date,
-        schedule_type=subject.schedule_type,
-        custom_intervals_days=subject.custom_intervals_days,
-        created_at=subject.created_at,
-        updated_at=subject.updated_at,
-        next_due_date=next_due,
-        intervals=intervals,
-    )
+    return build_subject_response(subject, review_service)
 
 
 @router.delete("/{subject_id}", status_code=status.HTTP_204_NO_CONTENT)

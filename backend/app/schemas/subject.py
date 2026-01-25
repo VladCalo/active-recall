@@ -147,3 +147,15 @@ class SubjectWithNextDue(SubjectResponse):
         ...,
         description="Active intervals (either default or custom)"
     )
+    revision_number: Optional[int] = Field(
+        None,
+        description="Which revision this is (1-based), None if not due today"
+    )
+    total_revisions: int = Field(
+        ...,
+        description="Total number of revisions in schedule"
+    )
+    is_completed: bool = Field(
+        False,
+        description="Whether all revisions are completed"
+    )

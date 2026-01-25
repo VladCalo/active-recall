@@ -64,6 +64,9 @@ def get_today_reviews(
     for subject in subjects:
         next_due = review_service.get_next_due_date(subject, timezone=tz)
         intervals = review_service.get_intervals(subject)
+        revision_number = review_service.get_revision_number(subject, today)
+        total_revisions = review_service.get_total_revisions(subject)
+        is_completed = review_service.is_completed(subject, today, tz)
         
         result_subjects.append(SubjectWithNextDue(
             id=subject.id,
@@ -75,6 +78,9 @@ def get_today_reviews(
             updated_at=subject.updated_at,
             next_due_date=next_due,
             intervals=intervals,
+            revision_number=revision_number,
+            total_revisions=total_revisions,
+            is_completed=is_completed,
         ))
     
     return TodayReviewsResponse(
@@ -126,6 +132,9 @@ def get_upcoming_reviews(
         for subject in subjects:
             next_due = review_service.get_next_due_date(subject, timezone=tz)
             intervals = review_service.get_intervals(subject)
+            revision_number = review_service.get_revision_number(subject, date_key)
+            total_revisions = review_service.get_total_revisions(subject)
+            is_completed = review_service.is_completed(subject, date_key, tz)
             
             reviews[date_str].append(SubjectWithNextDue(
                 id=subject.id,
@@ -137,6 +146,9 @@ def get_upcoming_reviews(
                 updated_at=subject.updated_at,
                 next_due_date=next_due,
                 intervals=intervals,
+                revision_number=revision_number,
+                total_revisions=total_revisions,
+                is_completed=is_completed,
             ))
             total_count += 1
     
@@ -209,11 +221,16 @@ def get_reviews_in_range(
         items[date_str] = []
         
         for subject in subjects:
+            revision_number = review_service.get_revision_number(subject, date_key)
+            total_revisions = review_service.get_total_revisions(subject)
+            
             items[date_str].append(CalendarSubject(
                 subject_id=str(subject.id),
                 subject_name=subject.name,
                 start_date=subject.start_date,
                 schedule_type=subject.schedule_type.value,
+                revision_number=revision_number or 0,
+                total_revisions=total_revisions,
             ))
             total_count += 1
     

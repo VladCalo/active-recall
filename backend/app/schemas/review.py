@@ -38,6 +38,8 @@ class CalendarSubject(BaseModel):
     subject_name: str = Field(..., description="Subject name")
     start_date: date = Field(..., description="Subject start date")
     schedule_type: str = Field(..., description="DEFAULT or CUSTOM")
+    revision_number: int = Field(..., description="Which revision this is (1-based)")
+    total_revisions: int = Field(..., description="Total number of revisions in schedule")
 
 
 class RangeReviewsResponse(BaseModel):

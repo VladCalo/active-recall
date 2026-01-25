@@ -138,6 +138,63 @@ class ReviewService:
         due_dates = self.compute_due_dates(subject)
         return target_date in due_dates
 
+    def get_revision_number(self, subject: Subject, target_date: date) -> Optional[int]:
+        """
+        Get the revision number (1-based) for a subject on a specific date.
+        
+        Args:
+            subject: Subject to check
+            target_date: Date to check
+            
+        Returns:
+            Revision number (1-based) if due on that date, None otherwise
+            
+        Example:
+            With intervals [1, 3, 7, 14]:
+            - Day 1: revision 1
+            - Day 3: revision 2
+            - Day 7: revision 3
+            - Day 14: revision 4
+        """
+        due_dates = self.compute_due_dates(subject)
+        if target_date in due_dates:
+            return due_dates.index(target_date) + 1  # 1-based
+        return None
+
+    def get_total_revisions(self, subject: Subject) -> int:
+        """
+        Get the total number of revisions for a subject.
+        
+        Args:
+            subject: Subject to check
+            
+        Returns:
+            Total number of revisions (length of intervals array)
+        """
+        return len(self.get_intervals(subject))
+
+    def is_completed(self, subject: Subject, as_of_date: date = None, timezone: str = None) -> bool:
+        """
+        Check if all revisions for a subject are completed.
+        
+        Args:
+            subject: Subject to check
+            as_of_date: Check as of this date (defaults to today)
+            timezone: Timezone for determining 'today'
+            
+        Returns:
+            True if all due dates are in the past
+        """
+        if as_of_date is None:
+            as_of_date = self.get_today(timezone)
+        
+        due_dates = self.compute_due_dates(subject)
+        if not due_dates:
+            return True
+        
+        # Completed if today is after the last due date
+        return as_of_date > due_dates[-1]
+
     def get_subjects_due_today(self, timezone: str = None) -> list[Subject]:
         """
         Get all subjects due for review today for the current user.

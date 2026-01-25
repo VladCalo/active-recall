@@ -146,6 +146,19 @@ export function Dashboard() {
 }
 
 /**
+ * Helper function to format subject name with revision number.
+ */
+function formatSubjectWithRevision(subject: Subject): string {
+  if (subject.is_completed) {
+    return `${subject.name} ✓`
+  }
+  if (subject.revision_number) {
+    return `${subject.name} ${subject.revision_number}`
+  }
+  return subject.name
+}
+
+/**
  * Card component for a single subject due for review.
  */
 function SubjectReviewCard({ subject }: { subject: Subject }) {
@@ -153,7 +166,9 @@ function SubjectReviewCard({ subject }: { subject: Subject }) {
     <Card className="hover:shadow-md transition-shadow">
       <CardHeader className="pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
         <div className="flex items-start justify-between gap-2">
-          <CardTitle className="text-base sm:text-lg leading-tight">{subject.name}</CardTitle>
+          <CardTitle className="text-base sm:text-lg leading-tight">
+            {formatSubjectWithRevision(subject)}
+          </CardTitle>
           <Badge 
             variant={subject.schedule_type === 'CUSTOM' ? 'secondary' : 'outline'}
             className="text-xs flex-shrink-0"
@@ -161,6 +176,11 @@ function SubjectReviewCard({ subject }: { subject: Subject }) {
             {subject.schedule_type}
           </Badge>
         </div>
+        {subject.revision_number && !subject.is_completed && (
+          <p className="text-xs text-muted-foreground">
+            Review {subject.revision_number} of {subject.total_revisions}
+          </p>
+        )}
       </CardHeader>
       <CardContent className="space-y-1.5 sm:space-y-2 px-3 sm:px-6 pb-3 sm:pb-6">
         <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground">

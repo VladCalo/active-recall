@@ -46,6 +46,17 @@ const MONTHS = [
 ]
 
 /**
+ * Format subject name with revision number.
+ */
+function formatSubjectWithRevision(subject: CalendarSubject): string {
+  if (subject.revision_number === subject.total_revisions) {
+    // Last revision - could show checkmark but we show number for consistency
+    return `${subject.subject_name} ${subject.revision_number}`
+  }
+  return `${subject.subject_name} ${subject.revision_number}`
+}
+
+/**
  * Generate a stable color for a subject based on its ID.
  * Returns a subtle background color class.
  */
@@ -373,9 +384,9 @@ export function Calendar() {
                   )}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium">{subject.subject_name}</span>
+                    <span className="font-medium">{formatSubjectWithRevision(subject)}</span>
                     <Badge variant="outline" className="text-xs">
-                      {subject.schedule_type}
+                      {subject.revision_number}/{subject.total_revisions}
                     </Badge>
                   </div>
                   <p className="text-xs mt-1 opacity-75">
@@ -463,7 +474,7 @@ function MonthView({
                               getSubjectColor(subject.subject_id)
                             )}
                           >
-                            {subject.subject_name}
+                            {formatSubjectWithRevision(subject)}
                           </div>
                         ))}
                         {subjects.length > 2 && (
@@ -571,9 +582,9 @@ function AgendaView({
                       getSubjectColor(subject.subject_id)
                     )}
                   >
-                    <span className="font-medium text-sm">{subject.subject_name}</span>
+                    <span className="font-medium text-sm">{formatSubjectWithRevision(subject)}</span>
                     <Badge variant="outline" className="text-xs">
-                      {subject.schedule_type}
+                      {subject.revision_number}/{subject.total_revisions}
                     </Badge>
                   </div>
                 ))}

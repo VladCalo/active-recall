@@ -32,6 +32,9 @@ export interface Subject {
   updated_at: string
   next_due_date: string | null
   intervals: number[]
+  revision_number: number | null
+  total_revisions: number
+  is_completed: boolean
 }
 
 export interface SubjectCreate {
@@ -68,6 +71,8 @@ export interface CalendarSubject {
   subject_name: string
   start_date: string
   schedule_type: ScheduleType
+  revision_number: number
+  total_revisions: number
 }
 
 export interface RangeReviewsResponse {

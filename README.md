@@ -8,6 +8,7 @@ A production-ready, security-hardened web application for tracking study subject
 - **Modern Authentication**: JWT with refresh token rotation and reuse detection
 - **Strong Password Policies**: Minimum 12 characters, complexity requirements, common password blocking
 - **Rate Limiting**: Redis-backed (with in-memory fallback) to prevent abuse
+- **Calendar View**: Visual calendar showing upcoming review due dates with month/agenda views
 - **Responsive UI**: Works on phones, tablets, and desktops
 - **Production Ready**: Docker Compose deployment with health checks
 
@@ -69,6 +70,24 @@ docker-compose up --build
                    │ (rate limit)│
                    └─────────────┘
 ```
+
+## Pages
+
+### Dashboard (`/`)
+Shows today's reviews at a glance - subjects due for review today with their schedule information.
+
+### Subjects (`/subjects`)
+CRUD interface for managing your study subjects. Create subjects with a start date and choose between DEFAULT schedule (1, 3, 7, 14, 30, 60, 120, 180 days) or CUSTOM intervals.
+
+### Calendar (`/calendar`)
+Visual calendar showing all upcoming review due dates:
+
+- **Month View**: Grid calendar with due subjects shown as color-coded badges on each day
+- **Agenda View**: List view showing only days with reviews, sorted chronologically
+- **Navigation**: Previous/next month buttons and "Today" quick-jump
+- **Filtering**: Search box to filter by subject name
+- **Day Details**: Click any day to see all subjects due in a popup dialog
+- **Responsive**: Adapts to mobile (compact badges) and desktop (full view)
 
 ## Security Features
 
@@ -161,6 +180,10 @@ curl -X POST http://localhost:7070/api/subjects \
 
 # Today's reviews
 curl "http://localhost:7070/api/reviews/today?tz=Europe/Bucharest" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+
+# Calendar range (for calendar view)
+curl "http://localhost:7070/api/reviews/range?start=2026-01-01&end=2026-01-31&tz=Europe/Bucharest" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 

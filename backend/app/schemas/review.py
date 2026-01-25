@@ -30,3 +30,23 @@ class UpcomingReviewsResponse(BaseModel):
         description="Map of date strings to subjects due on that date"
     )
     total_count: int = Field(..., description="Total number of reviews in the period")
+
+
+class CalendarSubject(BaseModel):
+    """Simplified subject info for calendar display."""
+    subject_id: str = Field(..., description="Subject UUID")
+    subject_name: str = Field(..., description="Subject name")
+    start_date: date = Field(..., description="Subject start date")
+    schedule_type: str = Field(..., description="DEFAULT or CUSTOM")
+
+
+class RangeReviewsResponse(BaseModel):
+    """Response schema for calendar range endpoint."""
+    timezone: str = Field(..., description="Timezone used for date calculation")
+    start: date = Field(..., description="Start of the requested range")
+    end: date = Field(..., description="End of the requested range")
+    items: dict[str, list[CalendarSubject]] = Field(
+        ...,
+        description="Map of date strings (YYYY-MM-DD) to subjects due on that date"
+    )
+    total_count: int = Field(..., description="Total number of due items in the range")

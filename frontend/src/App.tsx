@@ -12,6 +12,7 @@ import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { Layout } from '@/components/Layout'
 import { Dashboard } from '@/pages/Dashboard'
 import { Subjects } from '@/pages/Subjects'
+import { Calendar } from '@/pages/Calendar'
 import { Login } from '@/pages/Login'
 import { Register } from '@/pages/Register'
 
@@ -70,6 +71,16 @@ function AppRoutes() {
           <ProtectedRoute>
             <Layout>
               <Subjects />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/calendar"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <Calendar />
             </Layout>
           </ProtectedRoute>
         }

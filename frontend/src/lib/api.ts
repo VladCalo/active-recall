@@ -63,6 +63,21 @@ export interface UpcomingReviewsResponse {
   total_count: number
 }
 
+export interface CalendarSubject {
+  subject_id: string
+  subject_name: string
+  start_date: string
+  schedule_type: ScheduleType
+}
+
+export interface RangeReviewsResponse {
+  timezone: string
+  start: string
+  end: string
+  items: Record<string, CalendarSubject[]>
+  total_count: number
+}
+
 export interface User {
   id: string
   email: string
@@ -338,6 +353,17 @@ export async function getUpcomingReviews(
 ): Promise<UpcomingReviewsResponse> {
   const response = await api.get<UpcomingReviewsResponse>('/reviews/upcoming', {
     params: { days, tz: timezone },
+  })
+  return response.data
+}
+
+export async function getReviewsInRange(
+  start: string,
+  end: string,
+  timezone = 'Europe/Bucharest'
+): Promise<RangeReviewsResponse> {
+  const response = await api.get<RangeReviewsResponse>('/reviews/range', {
+    params: { start, end, tz: timezone },
   })
   return response.data
 }

@@ -270,62 +270,77 @@ server {
 }
 ```
 
-### Raspberry Pi 5 Deployment (Recommended)
+### Raspberry Pi 5 / VM Deployment
 
-One-command deployment with auto-start on boot:
+#### First-Time Deploy
 
 ```bash
-# SSH to your Pi
-ssh pi@your-pi-ip
-
 # Clone the repo
-git clone https://github.com/your/active-recall.git
+cd /mnt/ssd/github
+git clone https://github.com/YOUR_USER/active-recall.git
 cd active-recall
 
-# Run the deployment script (does everything)
+# Deploy (creates dirs, env, systemd service, builds, starts)
 sudo ./deploy-rpi.sh
-```
 
-**What the script does:**
-1. Creates data directories at `/mnt/ssd/apps/active-recall/data/`
-2. Generates secure secrets automatically
-3. Builds and starts Docker containers
-4. Creates a systemd service for auto-start on boot
-5. Stores database at `/mnt/ssd/apps/active-recall/data/db/active-recall.db`
-
-**After deployment:**
-```bash
-# Edit CORS to allow access from your network
+# Edit CORS to add your IP
 sudo nano /mnt/ssd/apps/active-recall/data/.env
+# Change: CORS_ORIGINS='["http://YOUR_IP","http://localhost"]'
 
-# Add your Pi's IP to CORS_ORIGINS:
-# CORS_ORIGINS=["http://192.168.1.100","http://raspberrypi.local"]
-
-# Restart to apply
+# Restart to apply CORS
 sudo systemctl restart active-recall
 ```
 
-**Service commands:**
+The deploy script:
+1. Creates data directories at `/mnt/ssd/apps/active-recall/data/`
+2. Generates secure secrets automatically
+3. Creates a systemd service for auto-start on boot
+4. Builds and starts Docker containers
+
+#### Update After Code Changes
+
 ```bash
-sudo systemctl status active-recall   # Check status
-sudo systemctl restart active-recall  # Restart
-sudo systemctl stop active-recall     # Stop
-sudo journalctl -u active-recall -f   # View logs
+cd /mnt/ssd/github/active-recall
+sudo ./update-rpi.sh
 ```
 
-**Data location:**
-- Database: `/mnt/ssd/apps/active-recall/data/db/active-recall.db`
-- Redis: `/mnt/ssd/apps/active-recall/data/redis/`
-- Config: `/mnt/ssd/apps/active-recall/data/.env`
-- App: `/mnt/ssd/github/active-recall/`
+This pulls latest code, rebuilds containers, and restarts the app. Database is preserved.
 
-**Backup your data:**
+#### Useful Commands
+
 ```bash
-# Backup database
+# Status
+sudo systemctl status active-recall
+docker ps
+
+# Logs
+sudo journalctl -u active-recall -f
+docker logs active-recall-backend -f
+
+# Restart
+sudo systemctl restart active-recall
+
+# Stop
+sudo systemctl stop active-recall
+```
+
+#### Data Locations
+
+| What | Path |
+|------|------|
+| Database | `/mnt/ssd/apps/active-recall/data/db/active-recall.db` |
+| Redis | `/mnt/ssd/apps/active-recall/data/redis/` |
+| Config | `/mnt/ssd/apps/active-recall/data/.env` |
+| App | `/mnt/ssd/github/active-recall/` |
+
+#### Backup
+
+```bash
 sudo cp /mnt/ssd/apps/active-recall/data/db/active-recall.db ~/backup-$(date +%Y%m%d).db
 ```
 
-**Uninstall:**
+#### Uninstall
+
 ```bash
 sudo ./uninstall-rpi.sh              # Keeps your data
 sudo ./uninstall-rpi.sh --delete-data # Deletes everything

@@ -5,12 +5,19 @@ This module configures Alembic to work with our SQLAlchemy models
 and application settings.
 """
 
+import sys
+import os
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
+
+# Add the backend directory to Python path for imports
+backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if backend_dir not in sys.path:
+    sys.path.insert(0, backend_dir)
 
 # Import our app's database configuration
 from app.database import Base

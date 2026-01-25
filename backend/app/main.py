@@ -14,6 +14,7 @@ Security Features:
 - Structured logging
 """
 
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,6 +22,8 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.middleware.base import BaseHTTPMiddleware
 from slowapi.errors import RateLimitExceeded
+from alembic.config import Config as AlembicConfig
+from alembic import command as alembic_command
 
 from app.config import get_settings
 from app.database import engine, Base, SessionLocal
@@ -38,12 +41,42 @@ setup_logging()
 logger = get_logger(__name__)
 
 
+def run_migrations():
+    """
+    Run alembic migrations programmatically.
+    
+    This ensures database schema is always up-to-date on startup.
+    """
+    # Get the directory where alembic.ini is located
+    backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    alembic_ini = os.path.join(backend_dir, "alembic.ini")
+    
+    if os.path.exists(alembic_ini):
+        logger.info("running_migrations", alembic_ini=alembic_ini)
+        alembic_cfg = AlembicConfig(alembic_ini)
+        # Set the script location relative to alembic.ini
+        alembic_cfg.set_main_option("script_location", os.path.join(backend_dir, "alembic"))
+        
+        try:
+            alembic_command.upgrade(alembic_cfg, "head")
+            logger.info("migrations_complete")
+        except Exception as e:
+            logger.warning("migration_failed", error=str(e))
+            # Fall back to create_all for new databases
+            logger.info("falling_back_to_create_all")
+            Base.metadata.create_all(bind=engine)
+    else:
+        # No alembic.ini, use create_all
+        logger.info("no_alembic_ini_using_create_all")
+        Base.metadata.create_all(bind=engine)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     Application lifespan handler.
     
-    On startup: Creates database tables, seeds admin, logs startup.
+    On startup: Runs migrations, seeds admin, logs startup.
     On shutdown: Logs shutdown.
     """
     logger.info(
@@ -52,8 +85,8 @@ async def lifespan(app: FastAPI):
         debug=settings.debug
     )
     
-    # Create tables
-    Base.metadata.create_all(bind=engine)
+    # Run database migrations
+    run_migrations()
     
     # Seed admin user
     db = SessionLocal()

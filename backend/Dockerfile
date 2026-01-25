@@ -32,6 +32,9 @@ WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
+# Set PYTHONPATH so alembic can find app module
+ENV PYTHONPATH="/app:$PYTHONPATH"
+
 # Copy application code
 COPY . .
 

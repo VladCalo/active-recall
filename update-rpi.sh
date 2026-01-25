@@ -6,24 +6,23 @@ set -e
 
 APP_DIR="/mnt/ssd/github/active-recall"
 ENV_FILE="/mnt/ssd/apps/active-recall/data/.env"
-COMPOSE_FILE="docker-compose.prod.yml"
 
 cd "$APP_DIR"
 
 echo "==> Pulling latest code..."
 git pull
 
+echo "==> Copying production compose file..."
+cp docker-compose.prod.yml docker-compose.yml
+
 echo "==> Stopping containers..."
-docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" down
+docker compose --env-file "$ENV_FILE" down
 
 echo "==> Rebuilding..."
-docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build
+docker compose --env-file "$ENV_FILE" build
 
 echo "==> Starting..."
-docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
+docker compose --env-file "$ENV_FILE" up -d
 
-echo "==> Done! Checking status..."
-docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps
-
-echo ""
-echo "Database preserved at: /mnt/ssd/apps/active-recall/data/db/"
+echo "==> Done!"
+docker compose --env-file "$ENV_FILE" ps

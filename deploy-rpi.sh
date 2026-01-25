@@ -117,11 +117,10 @@ Wants=network-online.target
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=${APP_DIR}
-EnvironmentFile=${ENV_FILE}
-ExecStartPre=/usr/bin/docker compose pull --ignore-pull-failures
-ExecStart=/usr/bin/docker compose up -d --build --remove-orphans
-ExecStop=/usr/bin/docker compose down
-ExecReload=/usr/bin/docker compose up -d --build
+ExecStartPre=/usr/bin/docker compose --env-file ${ENV_FILE} pull --ignore-pull-failures
+ExecStart=/usr/bin/docker compose --env-file ${ENV_FILE} up -d --build --remove-orphans
+ExecStop=/usr/bin/docker compose --env-file ${ENV_FILE} down
+ExecReload=/usr/bin/docker compose --env-file ${ENV_FILE} up -d --build
 TimeoutStartSec=300
 TimeoutStopSec=60
 
@@ -138,14 +137,9 @@ echo -e "\n${YELLOW}Step 5: Building and starting containers...${NC}"
 
 cd "${APP_DIR}"
 
-# Source environment
-set -a
-source "${ENV_FILE}"
-set +a
-
-# Build and start
-docker compose build
-docker compose up -d
+# Build and start with env file
+docker compose --env-file "${ENV_FILE}" build
+docker compose --env-file "${ENV_FILE}" up -d
 
 echo -e "${GREEN}✓ Containers started${NC}"
 

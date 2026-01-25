@@ -9,6 +9,8 @@ ENV_FILE="/mnt/ssd/apps/active-recall/data/.env"
 
 cd "$APP_DIR"
 
+git restore docker-compose.yml
+
 echo "==> Pulling latest code..."
 git pull
 

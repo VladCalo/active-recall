@@ -13,6 +13,7 @@ import { Layout } from '@/components/Layout'
 import { Dashboard } from '@/pages/Dashboard'
 import { Subjects } from '@/pages/Subjects'
 import { Calendar } from '@/pages/Calendar'
+import { Admin } from '@/pages/Admin'
 import { Login } from '@/pages/Login'
 import { Register } from '@/pages/Register'
 
@@ -27,6 +28,27 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   }
   
   if (isAuthenticated) {
+    return <Navigate to="/" replace />
+  }
+  
+  return <>{children}</>
+}
+
+/**
+ * Admin-only route that requires admin privileges.
+ */
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { user, isAuthenticated, isLoading } = useAuth()
+  
+  if (isLoading) {
+    return null
+  }
+  
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />
+  }
+  
+  if (!user?.is_admin) {
     return <Navigate to="/" replace />
   }
   
@@ -83,6 +105,16 @@ function AppRoutes() {
               <Calendar />
             </Layout>
           </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin"
+        element={
+          <AdminRoute>
+            <Layout>
+              <Admin />
+            </Layout>
+          </AdminRoute>
         }
       />
       

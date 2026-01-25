@@ -6,12 +6,13 @@ Security considerations:
 - Email is stored case-insensitively (normalized to lowercase)
 - No sensitive data exposed in repr
 - Failed login tracking for brute force protection
+- Admin and disabled flags for access control
 """
 
 import uuid
 from datetime import datetime
 from typing import Optional, TYPE_CHECKING
-from sqlalchemy import String, DateTime, Integer, func
+from sqlalchemy import String, DateTime, Integer, Boolean, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
@@ -30,6 +31,8 @@ class User(Base):
         id: UUID primary key (stored as string for SQLite compatibility)
         email: Unique email address (stored lowercase for case-insensitive matching)
         password_hash: Argon2 hash of the user's password
+        is_admin: Whether this user has admin privileges
+        is_disabled: Whether this account is disabled (cannot login)
         failed_login_attempts: Count of consecutive failed logins
         locked_until: Timestamp until account is unlocked
         created_at: Timestamp when account was created
@@ -55,6 +58,19 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(
         String(255), 
         nullable=False
+    )
+    
+    # Admin and access control
+    is_admin: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        index=True
+    )
+    is_disabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False
     )
     
     # Brute force protection
@@ -99,4 +115,4 @@ class User(Base):
     
     def __repr__(self) -> str:
         """Safe repr that doesn't expose sensitive data."""
-        return f"<User(id={self.id}, email={self.email[:3]}***)>"
+        return f"<User(id={self.id}, email={self.email[:3]}***{'[ADMIN]' if self.is_admin else ''})>"

@@ -223,6 +223,12 @@ class AuthService:
             auth_logger.login_failure(email, ip_address or "unknown", "user_not_found")
             return None
         
+        # Check if account is disabled
+        if user.is_disabled:
+            await asyncio.sleep(settings.login_delay_seconds)
+            auth_logger.login_failure(email, ip_address or "unknown", "account_disabled")
+            return None
+        
         # Check if account is locked
         if self._is_account_locked(user):
             await asyncio.sleep(settings.login_delay_seconds)
@@ -324,9 +330,14 @@ class AuthService:
         token_record.used_at = datetime.now(timezone.utc)
         self.db.commit()
         
-        # Verify user still exists
+        # Verify user still exists and is not disabled
         user = self.get_user_by_id(user_id)
         if not user:
+            return None
+        
+        if user.is_disabled:
+            # User was disabled - revoke their tokens
+            self._revoke_token_family(family_id)
             return None
         
         # Generate new tokens (same family for tracking)

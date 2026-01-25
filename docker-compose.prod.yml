@@ -54,6 +54,10 @@ services:
       - COOKIE_SAMESITE=lax
       - CORS_ORIGINS=${CORS_ORIGINS}
       - MIN_PASSWORD_LENGTH=10
+      # Admin account - CHANGE THESE IN PRODUCTION!
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-adminvladcalo}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-Adminvladcalo123!}
+      - ADMIN_ALLOW_DEFAULT=${ADMIN_ALLOW_DEFAULT:-false}
     volumes:
       - ${DATA_DIR:-/mnt/ssd/apps/active-recall/data}/db:/data
     depends_on:

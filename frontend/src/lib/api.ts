@@ -81,9 +81,70 @@ export interface RangeReviewsResponse {
 export interface User {
   id: string
   email: string
+  is_admin: boolean
   created_at: string
   updated_at: string
   last_login_at: string | null
+}
+
+// Admin types
+export interface AdminStats {
+  total_users: number
+  total_subjects: number
+  admin_count: number
+  disabled_users: number
+  active_users_last_7_days: number
+  subjects_created_last_7_days: number
+  reviews_due_today_total: number
+  reviews_due_next_7_days_total: number
+}
+
+export interface AdminUserListItem {
+  id: string
+  email: string
+  is_admin: boolean
+  is_disabled: boolean
+  created_at: string | null
+  last_login_at: string | null
+  subject_count: number
+}
+
+export interface AdminUserListResponse {
+  users: AdminUserListItem[]
+  total: number
+  skip: number
+  limit: number
+}
+
+export interface AdminSubjectSummary {
+  id: string
+  name: string
+  start_date: string
+  schedule_type: string
+}
+
+export interface AdminUserDetail {
+  id: string
+  email: string
+  is_admin: boolean
+  is_disabled: boolean
+  failed_login_attempts: number
+  locked_until: string | null
+  created_at: string | null
+  updated_at: string | null
+  last_login_at: string | null
+  subject_count: number
+  subjects: AdminSubjectSummary[]
+}
+
+export interface AdminTrafficStats {
+  period_hours: number
+  request_count_total: number
+  requests_by_route: Record<string, number>
+  status_code_counts: Record<string, number>
+  avg_latency_ms: number
+  p95_latency_ms: number
+  requests_per_minute: number
 }
 
 export interface AuthResponse {
@@ -364,6 +425,60 @@ export async function getReviewsInRange(
 ): Promise<RangeReviewsResponse> {
   const response = await api.get<RangeReviewsResponse>('/reviews/range', {
     params: { start, end, tz: timezone },
+  })
+  return response.data
+}
+
+// =============================================================================
+// Admin API Functions
+// =============================================================================
+
+export async function getAdminStats(): Promise<AdminStats> {
+  const response = await api.get<AdminStats>('/admin/stats')
+  return response.data
+}
+
+export async function getAdminUsers(
+  skip = 0,
+  limit = 20,
+  search?: string
+): Promise<AdminUserListResponse> {
+  const response = await api.get<AdminUserListResponse>('/admin/users', {
+    params: { skip, limit, search: search || undefined },
+  })
+  return response.data
+}
+
+export async function getAdminUserDetail(userId: string): Promise<AdminUserDetail> {
+  const response = await api.get<AdminUserDetail>(`/admin/users/${userId}`)
+  return response.data
+}
+
+export async function updateAdminUser(
+  userId: string,
+  data: { is_admin?: boolean; is_disabled?: boolean }
+): Promise<AdminUserDetail> {
+  try {
+    const response = await api.patch<AdminUserDetail>(`/admin/users/${userId}`, data)
+    return response.data
+  } catch (error) {
+    throw new Error(getErrorMessage(error))
+  }
+}
+
+export async function deleteAdminUser(userId: string): Promise<void> {
+  try {
+    await api.delete(`/admin/users/${userId}`, {
+      headers: { 'X-Admin-Confirm': 'DELETE' },
+    })
+  } catch (error) {
+    throw new Error(getErrorMessage(error))
+  }
+}
+
+export async function getAdminTraffic(hours = 24): Promise<AdminTrafficStats> {
+  const response = await api.get<AdminTrafficStats>('/admin/traffic', {
+    params: { hours },
   })
   return response.data
 }

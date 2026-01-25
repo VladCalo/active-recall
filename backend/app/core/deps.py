@@ -5,11 +5,14 @@ This module provides dependency injection for:
 - Current user extraction from JWT tokens
 - Optional authentication (for public endpoints)
 - Required authentication (for protected endpoints)
+- Admin-only access control
 
 Security considerations:
 - Tokens can be passed via Authorization header or httpOnly cookie
 - Invalid tokens result in 401 Unauthorized
 - User existence is verified on every request
+- Disabled users are rejected
+- Admin endpoints require is_admin=True
 """
 
 from typing import Optional
@@ -65,6 +68,7 @@ async def get_current_user(
     Get the current authenticated user.
     
     This is a required dependency - raises 401 if not authenticated.
+    Also checks if user is disabled.
     
     Args:
         token: JWT token from request
@@ -75,6 +79,7 @@ async def get_current_user(
         
     Raises:
         HTTPException: 401 if not authenticated or invalid token
+        HTTPException: 403 if user is disabled
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -103,7 +108,37 @@ async def get_current_user(
     if not user:
         raise credentials_exception
     
+    # Check if user is disabled
+    if user.is_disabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is disabled. Contact administrator."
+        )
+    
     return user
+
+
+async def get_current_admin_user(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """
+    Get the current user and verify they are an admin.
+    
+    Args:
+        current_user: The authenticated user
+        
+    Returns:
+        Admin User object
+        
+    Raises:
+        HTTPException: 403 if user is not an admin
+    """
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    return current_user
 
 
 async def get_current_user_optional(
@@ -139,4 +174,10 @@ async def get_current_user_optional(
     if not user_id:
         return None
     
-    return db.query(User).filter(User.id == user_id).first()
+    user = db.query(User).filter(User.id == user_id).first()
+    
+    # Return None for disabled users in optional auth
+    if user and user.is_disabled:
+        return None
+    
+    return user

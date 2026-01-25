@@ -58,6 +58,7 @@ class UserResponse(BaseModel):
     """Schema for user profile response (safe, no password)."""
     id: str
     email: str
+    is_admin: bool = False
     created_at: datetime
     updated_at: datetime
     last_login_at: Optional[datetime]

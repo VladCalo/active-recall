@@ -23,10 +23,13 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from slowapi.errors import RateLimitExceeded
 
 from app.config import get_settings
-from app.database import engine, Base
+from app.database import engine, Base, SessionLocal
 from app.api import subjects_router, reviews_router, health_router, auth_router
+from app.api.admin import router as admin_router
 from app.core.rate_limiter import limiter, rate_limit_exceeded_handler
 from app.core.logging import setup_logging, get_logger
+from app.core.metrics import MetricsMiddleware
+from app.services.admin_service import seed_admin_user
 
 settings = get_settings()
 
@@ -40,7 +43,7 @@ async def lifespan(app: FastAPI):
     """
     Application lifespan handler.
     
-    On startup: Creates database tables, logs startup.
+    On startup: Creates database tables, seeds admin, logs startup.
     On shutdown: Logs shutdown.
     """
     logger.info(
@@ -51,6 +54,22 @@ async def lifespan(app: FastAPI):
     
     # Create tables
     Base.metadata.create_all(bind=engine)
+    
+    # Seed admin user
+    db = SessionLocal()
+    try:
+        created, message = seed_admin_user(db)
+        if created:
+            logger.info("admin_user_seeded", message=message)
+        else:
+            logger.info("admin_user_exists", message=message)
+    except RuntimeError as e:
+        # Production safety check failed
+        logger.error("admin_seed_failed", error=str(e))
+        raise
+    finally:
+        db.close()
+    
     yield
     
     logger.info("application_shutdown")
@@ -117,6 +136,13 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(SecurityHeadersMiddleware)
+
+
+# =============================================================================
+# Metrics Middleware (for admin traffic stats)
+# =============================================================================
+
+app.add_middleware(MetricsMiddleware)
 
 
 # =============================================================================
@@ -204,6 +230,7 @@ app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(subjects_router)
 app.include_router(reviews_router)
+app.include_router(admin_router)
 
 
 @app.get("/")

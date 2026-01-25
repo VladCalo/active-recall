@@ -8,9 +8,13 @@ This module provides shared fixtures for all tests:
 - Sample data factories
 """
 
+import os
 import pytest
 from datetime import date
 from typing import Generator
+
+# Set testing mode before importing app
+os.environ["TESTING"] = "1"
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, StaticPool

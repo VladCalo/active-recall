@@ -94,6 +94,13 @@ COOKIE_SECURE=false
 # CORS - Add your RPi's IP/hostname here
 # Example: CORS_ORIGINS='["http://192.168.1.100","http://raspberrypi.local"]'
 CORS_ORIGINS='["http://localhost","http://127.0.0.1"]'
+
+# Admin Account - CHANGE THESE!
+# Default credentials are for initial setup only
+ADMIN_EMAIL=adminvladcalo
+ADMIN_PASSWORD=Adminvladcalo123!
+# Set to true to allow default credentials (NOT RECOMMENDED for production)
+ADMIN_ALLOW_DEFAULT=true
 EOF
     
     chmod 600 "${ENV_FILE}"
@@ -173,6 +180,11 @@ echo -e "  ${YELLOW}cd ${APP_DIR} && docker compose logs -f${NC} - View containe
 echo -e "  ${YELLOW}cd ${APP_DIR} && docker compose ps${NC}      - Container status"
 echo -e ""
 echo -e "${YELLOW}IMPORTANT:${NC}"
-echo -e "  Edit ${ENV_FILE} to add your network IP to CORS_ORIGINS"
-echo -e "  Example: CORS_ORIGINS=[\"http://${IP_ADDR}\",\"http://$(hostname).local\"]"
-echo -e "  Then run: ${YELLOW}sudo systemctl restart ${APP_NAME}${NC}"
+echo -e "  1. Edit ${ENV_FILE} to add your network IP to CORS_ORIGINS"
+echo -e "     Example: CORS_ORIGINS=[\"http://${IP_ADDR}\",\"http://$(hostname).local\"]"
+echo -e ""
+echo -e "  2. ${RED}CHANGE DEFAULT ADMIN CREDENTIALS!${NC}"
+echo -e "     Default login: adminvladcalo / Adminvladcalo123!"
+echo -e "     Edit ADMIN_EMAIL and ADMIN_PASSWORD in ${ENV_FILE}"
+echo -e ""
+echo -e "  3. Restart to apply changes: ${YELLOW}sudo systemctl restart ${APP_NAME}${NC}"

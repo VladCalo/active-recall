@@ -104,6 +104,14 @@ class Settings(BaseSettings):
     default_timezone: str = "Europe/Bucharest"
     default_intervals: list[int] = [1, 3, 7, 14, 30, 60, 120, 180]
     
+    # ==========================================================================
+    # Admin Account Configuration
+    # SECURITY: Change these defaults in production!
+    # ==========================================================================
+    admin_email: str = "adminvladcalo"
+    admin_password: str = "Adminvladcalo123!"
+    admin_allow_default: bool = False  # Must set True to allow defaults in production
+
     @field_validator('jwt_secret_key')
     @classmethod
     def validate_jwt_secret(cls, v: str, info) -> str:

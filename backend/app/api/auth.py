@@ -52,7 +52,7 @@ def get_auth_service(db: Session = Depends(get_db)) -> AuthService:
     return AuthService(db)
 
 
-def set_refresh_cookie(response: Response, refresh_token: str) -> None:
+def set_refresh_cookie(response: Response, refresh_token: str, remember_me: bool = True) -> None:
     """
     Set refresh token as httpOnly cookie.
     
@@ -61,13 +61,18 @@ def set_refresh_cookie(response: Response, refresh_token: str) -> None:
     - secure: Only sent over HTTPS (in production)
     - samesite: Prevents CSRF attacks
     """
+    days = (
+        settings.refresh_token_expire_days_remember 
+        if remember_me 
+        else settings.refresh_token_expire_days
+    )
     response.set_cookie(
         key="refresh_token",
         value=refresh_token,
         httponly=True,
         secure=settings.cookie_secure,
         samesite=settings.cookie_samesite,
-        max_age=settings.refresh_token_expire_days * 24 * 60 * 60,
+        max_age=days * 24 * 60 * 60,
         path="/api/auth",  # Only sent to auth endpoints
     )
 
@@ -147,7 +152,8 @@ async def login(
     user_agent = request.headers.get("User-Agent", "")[:500]
     
     result = await auth_service.login(
-        data.email, data.password, 
+        data.email, data.password,
+        remember_me=data.remember_me,
         ip_address=ip, user_agent=user_agent
     )
     
@@ -160,7 +166,7 @@ async def login(
     
     user, access_token, refresh_token = result
     
-    set_refresh_cookie(response, refresh_token)
+    set_refresh_cookie(response, refresh_token, remember_me=data.remember_me)
     
     return AuthResponse(
         user=UserResponse.model_validate(user),

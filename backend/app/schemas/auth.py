@@ -42,6 +42,10 @@ class UserLogin(BaseModel):
         max_length=128,  # Prevent DoS with very long passwords
         description="User password"
     )
+    remember_me: bool = Field(
+        default=True,
+        description="Keep logged in for 30 days instead of 7"
+    )
     
     @field_validator('email')
     @classmethod

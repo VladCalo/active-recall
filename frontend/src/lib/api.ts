@@ -239,9 +239,9 @@ export async function register(email: string, password: string): Promise<AuthRes
   }
 }
 
-export async function login(email: string, password: string): Promise<AuthResponse> {
+export async function login(email: string, password: string, rememberMe: boolean = true): Promise<AuthResponse> {
   try {
-    const response = await api.post<AuthResponse>('/auth/login', { email, password })
+    const response = await api.post<AuthResponse>('/auth/login', { email, password, remember_me: rememberMe })
     setAccessToken(response.data.access_token)
     return response.data
   } catch (error) {

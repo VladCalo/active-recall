@@ -17,6 +17,7 @@ import { useAuth } from '@/contexts/AuthContext'
 export function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [rememberMe, setRememberMe] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [retryAfter, setRetryAfter] = useState<number | null>(null)
@@ -35,7 +36,7 @@ export function Login() {
     setIsLoading(true)
 
     try {
-      await login(email, password)
+      await login(email, password, rememberMe)
       navigate(from, { replace: true })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Login failed'
@@ -116,6 +117,19 @@ export function Login() {
                   disabled={isLoading}
                 />
               </div>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="rememberMe"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+              />
+              <Label htmlFor="rememberMe" className="text-sm font-normal cursor-pointer">
+                Remember me for 30 days
+              </Label>
             </div>
             
             <Button 

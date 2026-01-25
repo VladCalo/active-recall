@@ -51,7 +51,8 @@ class Settings(BaseSettings):
     
     # Token expiration times
     access_token_expire_minutes: int = 15  # Short-lived for security
-    refresh_token_expire_days: int = 7     # Longer-lived, stored in httpOnly cookie
+    refresh_token_expire_days: int = 7     # Default: 7 days
+    refresh_token_expire_days_remember: int = 30  # "Remember me": 30 days
     
     # ==========================================================================
     # Security Settings

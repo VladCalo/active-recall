@@ -85,12 +85,12 @@ class AuthService:
         token_id: str, 
         family_id: str,
         ip_address: Optional[str] = None,
-        user_agent: Optional[str] = None
+        user_agent: Optional[str] = None,
+        expires_days: Optional[int] = None
     ) -> RefreshToken:
         """Create a refresh token record in database."""
-        expires_at = datetime.now(timezone.utc) + timedelta(
-            days=settings.refresh_token_expire_days
-        )
+        days = expires_days or settings.refresh_token_expire_days
+        expires_at = datetime.now(timezone.utc) + timedelta(days=days)
         
         token_record = RefreshToken(
             id=token_id,
@@ -193,6 +193,7 @@ class AuthService:
         self, 
         email: str, 
         password: str,
+        remember_me: bool = True,
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None
     ) -> Optional[Tuple[User, str, str]]:
@@ -245,13 +246,23 @@ class AuthService:
         # Clean up expired tokens
         self._cleanup_expired_tokens(user.id)
         
-        # Generate tokens
+        # Generate tokens (longer expiry if remember_me)
         access_token = create_access_token({"sub": user.id})
-        refresh_jwt, token_id, family_id = create_refresh_token({"sub": user.id})
         
-        # Store refresh token record
+        token_days = (
+            settings.refresh_token_expire_days_remember 
+            if remember_me 
+            else settings.refresh_token_expire_days
+        )
+        refresh_jwt, token_id, family_id = create_refresh_token(
+            {"sub": user.id},
+            expires_delta=timedelta(days=token_days)
+        )
+        
+        # Store refresh token record with appropriate expiry
         self._create_refresh_token_record(
-            user.id, token_id, family_id, ip_address, user_agent
+            user.id, token_id, family_id, ip_address, user_agent,
+            expires_days=token_days
         )
         
         auth_logger.login_success(user.id, user.email, ip_address or "unknown")

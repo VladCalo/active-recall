@@ -81,6 +81,7 @@ def test_user(db: Session) -> User:
         email="test@example.com",
         # Password: Test@Password123 (meets all requirements)
         password_hash=hash_password("Test@Password123"),
+        review_tracking_start_date=date(2026, 1, 1),
     )
     db.add(user)
     db.commit()
@@ -94,6 +95,7 @@ def other_user(db: Session) -> User:
     user = User(
         email="other@example.com",
         password_hash=hash_password("Other@Password123"),
+        review_tracking_start_date=date(2026, 1, 1),
     )
     db.add(user)
     db.commit()

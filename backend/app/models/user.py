@@ -10,9 +10,9 @@ Security considerations:
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional, TYPE_CHECKING
-from sqlalchemy import String, DateTime, Integer, Boolean, func
+from sqlalchemy import String, Date, DateTime, Integer, Boolean, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
@@ -98,6 +98,10 @@ class User(Base):
     )
     last_login_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime, 
+        nullable=True
+    )
+    review_tracking_start_date: Mapped[Optional[date]] = mapped_column(
+        Date,
         nullable=True
     )
     

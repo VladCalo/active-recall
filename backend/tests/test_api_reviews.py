@@ -25,7 +25,7 @@ class TestTodayReviews:
         assert response.status_code == 200
         data = response.json()
         assert data["count"] == 0
-        assert data["subjects"] == []
+        assert data["events"] == []
         assert "today" in data
         assert data["timezone"] == "Europe/Bucharest"
 
@@ -42,8 +42,8 @@ class TestTodayReviews:
             assert response.status_code == 200
             data = response.json()
             assert data["count"] == 1
-            assert len(data["subjects"]) == 1
-            assert data["subjects"][0]["name"] == "Cardiology"
+            assert len(data["events"]) == 1
+            assert data["events"][0]["subject_name"] == "Cardiology"
 
     def test_respects_timezone_parameter(self, client, sample_subject, auth_headers):
         """Should use provided timezone for date calculation."""
@@ -63,14 +63,17 @@ class TestTodayReviews:
             response = client.get("/api/reviews/today", headers=auth_headers)
             
             data = response.json()
-            subject = data["subjects"][0]
+            subject = data["events"][0]
             
-            assert "id" in subject
-            assert "name" in subject
+            assert "subject_id" in subject
+            assert "subject_name" in subject
             assert "start_date" in subject
             assert "schedule_type" in subject
-            assert "intervals" in subject
-            assert "next_due_date" in subject
+            assert "due_date" in subject
+            assert "effective_date" in subject
+            assert "revision_number" in subject
+            assert "total_revisions" in subject
+            assert "is_completed" in subject
 
 
 class TestUpcomingReviews:
@@ -134,10 +137,11 @@ class TestRangeReviews:
         """Should return reviews grouped by date within the range."""
         # sample_subject has start_date=2026-01-25 with DEFAULT schedule
         # Due dates: 2026-01-26 (day 1), 2026-01-28 (day 3), 2026-02-01 (day 7)
-        response = client.get(
-            "/api/reviews/range?start=2026-01-25&end=2026-02-05",
-            headers=auth_headers
-        )
+        with patch.object(ReviewService, "get_today", return_value=date(2026, 1, 25)):
+            response = client.get(
+                "/api/reviews/range?start=2026-01-25&end=2026-02-05",
+                headers=auth_headers
+            )
         
         assert response.status_code == 200
         data = response.json()
@@ -164,10 +168,11 @@ class TestRangeReviews:
         """Should correctly calculate due dates for CUSTOM schedule."""
         # sample_custom_subject has start_date=2026-01-25 with intervals [2, 5, 10]
         # Due dates: 2026-01-27 (day 2), 2026-01-30 (day 5), 2026-02-04 (day 10)
-        response = client.get(
-            "/api/reviews/range?start=2026-01-25&end=2026-02-10",
-            headers=auth_headers
-        )
+        with patch.object(ReviewService, "get_today", return_value=date(2026, 1, 25)):
+            response = client.get(
+                "/api/reviews/range?start=2026-01-25&end=2026-02-10",
+                headers=auth_headers
+            )
         
         assert response.status_code == 200
         data = response.json()
@@ -186,18 +191,20 @@ class TestRangeReviews:
     ):
         """User A should not see User B's subjects."""
         # User A sees their subject
-        response_a = client.get(
-            "/api/reviews/range?start=2026-01-25&end=2026-02-05",
-            headers=auth_headers
-        )
+        with patch.object(ReviewService, "get_today", return_value=date(2026, 1, 25)):
+            response_a = client.get(
+                "/api/reviews/range?start=2026-01-25&end=2026-02-05",
+                headers=auth_headers
+            )
         assert response_a.status_code == 200
         data_a = response_a.json()
         
         # User B sees their subject
-        response_b = client.get(
-            "/api/reviews/range?start=2026-01-25&end=2026-02-05",
-            headers=other_auth_headers
-        )
+        with patch.object(ReviewService, "get_today", return_value=date(2026, 1, 25)):
+            response_b = client.get(
+                "/api/reviews/range?start=2026-01-25&end=2026-02-05",
+                headers=other_auth_headers
+            )
         assert response_b.status_code == 200
         data_b = response_b.json()
         
@@ -259,10 +266,11 @@ class TestRangeReviews:
 
     def test_returns_total_count(self, client, sample_subject, auth_headers):
         """Should return correct total count of due items."""
-        response = client.get(
-            "/api/reviews/range?start=2026-01-25&end=2026-02-28",
-            headers=auth_headers
-        )
+        with patch.object(ReviewService, "get_today", return_value=date(2026, 1, 25)):
+            response = client.get(
+                "/api/reviews/range?start=2026-01-25&end=2026-02-28",
+                headers=auth_headers
+            )
         
         assert response.status_code == 200
         data = response.json()
@@ -273,10 +281,11 @@ class TestRangeReviews:
 
     def test_respects_timezone_parameter(self, client, sample_subject, auth_headers):
         """Should accept and return timezone parameter."""
-        response = client.get(
-            "/api/reviews/range?start=2026-01-25&end=2026-02-05&tz=UTC",
-            headers=auth_headers
-        )
+        with patch.object(ReviewService, "get_today", return_value=date(2026, 1, 25)):
+            response = client.get(
+                "/api/reviews/range?start=2026-01-25&end=2026-02-05&tz=UTC",
+                headers=auth_headers
+            )
         
         assert response.status_code == 200
         data = response.json()

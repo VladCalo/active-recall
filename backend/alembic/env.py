@@ -24,7 +24,7 @@ from app.database import Base
 from app.config import get_settings
 
 # Import all models to ensure they're registered with Base
-from app.models import User, Subject, RefreshToken  # noqa: F401
+from app.models import User, Subject, RefreshToken, ReviewEvent  # noqa: F401
 
 # Alembic Config object
 config = context.config

@@ -51,10 +51,25 @@ export interface SubjectUpdate {
   custom_intervals_days?: number[]
 }
 
+export interface ReviewEvent {
+  subject_id: string
+  subject_name: string
+  start_date: string
+  schedule_type: ScheduleType
+  due_date: string
+  effective_date: string
+  revision_number: number
+  total_revisions: number
+  is_completed: boolean
+  is_missed: boolean
+  was_rescheduled: boolean
+  rescheduled_to: string | null
+}
+
 export interface TodayReviewsResponse {
   today: string
   timezone: string
-  subjects: Subject[]
+  events: ReviewEvent[]
   count: number
 }
 
@@ -62,18 +77,11 @@ export interface UpcomingReviewsResponse {
   start_date: string
   end_date: string
   timezone: string
-  reviews: Record<string, Subject[]>
+  reviews: Record<string, ReviewEvent[]>
   total_count: number
 }
 
-export interface CalendarSubject {
-  subject_id: string
-  subject_name: string
-  start_date: string
-  schedule_type: ScheduleType
-  revision_number: number
-  total_revisions: number
-}
+export type CalendarSubject = ReviewEvent
 
 export interface RangeReviewsResponse {
   timezone: string
@@ -432,6 +440,38 @@ export async function getReviewsInRange(
     params: { start, end, tz: timezone },
   })
   return response.data
+}
+
+export async function completeReviewEvent(
+  subjectId: string,
+  dueDate: string,
+  isCompleted: boolean
+): Promise<void> {
+  try {
+    await api.post('/reviews/events/complete', {
+      subject_id: subjectId,
+      due_date: dueDate,
+      is_completed: isCompleted,
+    })
+  } catch (error) {
+    throw new Error(getErrorMessage(error))
+  }
+}
+
+export async function rescheduleReviewEvent(
+  subjectId: string,
+  dueDate: string,
+  newDate: string
+): Promise<void> {
+  try {
+    await api.post('/reviews/events/reschedule', {
+      subject_id: subjectId,
+      due_date: dueDate,
+      new_date: newDate,
+    })
+  } catch (error) {
+    throw new Error(getErrorMessage(error))
+  }
 }
 
 // =============================================================================

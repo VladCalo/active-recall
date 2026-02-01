@@ -8,18 +8,19 @@ Security: All endpoints require authentication and are scoped to the current use
 
 from datetime import date, timedelta
 from fastapi import APIRouter, Depends, Query, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
 from app.services.review_service import ReviewService
-from app.schemas.subject import SubjectWithNextDue
 from app.schemas.review import (
     TodayReviewsResponse, 
     UpcomingReviewsResponse,
     RangeReviewsResponse,
     CalendarSubject,
+    ReviewEvent,
 )
 from app.config import get_settings
 
@@ -29,6 +30,18 @@ settings = get_settings()
 
 # Maximum allowed range in days for the /range endpoint
 MAX_RANGE_DAYS = 370
+
+
+class ReviewEventCompleteRequest(BaseModel):
+    subject_id: str = Field(..., description="Subject UUID")
+    due_date: date = Field(..., description="Original due date (YYYY-MM-DD)")
+    is_completed: bool = Field(True, description="Completion status")
+
+
+class ReviewEventRescheduleRequest(BaseModel):
+    subject_id: str = Field(..., description="Subject UUID")
+    due_date: date = Field(..., description="Original due date (YYYY-MM-DD)")
+    new_date: date = Field(..., description="New date to reschedule to (YYYY-MM-DD)")
 
 
 def get_review_service(
@@ -58,36 +71,14 @@ def get_today_reviews(
         Today's date, timezone, and list of subjects due
     """
     today = review_service.get_today(tz)
-    subjects = review_service.get_subjects_due_today(tz)
-    
-    result_subjects = []
-    for subject in subjects:
-        next_due = review_service.get_next_due_date(subject, timezone=tz)
-        intervals = review_service.get_intervals(subject)
-        revision_number = review_service.get_revision_number(subject, today)
-        total_revisions = review_service.get_total_revisions(subject)
-        is_completed = review_service.is_completed(subject, today, tz)
-        
-        result_subjects.append(SubjectWithNextDue(
-            id=subject.id,
-            name=subject.name,
-            start_date=subject.start_date,
-            schedule_type=subject.schedule_type,
-            custom_intervals_days=subject.custom_intervals_days,
-            created_at=subject.created_at,
-            updated_at=subject.updated_at,
-            next_due_date=next_due,
-            intervals=intervals,
-            revision_number=revision_number,
-            total_revisions=total_revisions,
-            is_completed=is_completed,
-        ))
-    
+    items = review_service.get_review_events_in_range(today, today, tz)
+    events = items.get(today, [])
+
     return TodayReviewsResponse(
         today=today,
         timezone=tz,
-        subjects=result_subjects,
-        count=len(result_subjects),
+        events=[ReviewEvent(**event) for event in events],
+        count=len(events),
     )
 
 
@@ -119,38 +110,15 @@ def get_upcoming_reviews(
     today = review_service.get_today(tz)
     end_date = today + timedelta(days=days - 1)
     
-    due_by_date = review_service.get_subjects_due_in_range(today, end_date)
-    
-    # Convert to response format
-    reviews: dict[str, list[SubjectWithNextDue]] = {}
+    due_by_date = review_service.get_review_events_in_range(today, end_date, tz)
+
+    reviews: dict[str, list[ReviewEvent]] = {}
     total_count = 0
-    
-    for date_key, subjects in due_by_date.items():
+
+    for date_key, events in due_by_date.items():
         date_str = date_key.isoformat()
-        reviews[date_str] = []
-        
-        for subject in subjects:
-            next_due = review_service.get_next_due_date(subject, timezone=tz)
-            intervals = review_service.get_intervals(subject)
-            revision_number = review_service.get_revision_number(subject, date_key)
-            total_revisions = review_service.get_total_revisions(subject)
-            is_completed = review_service.is_completed(subject, date_key, tz)
-            
-            reviews[date_str].append(SubjectWithNextDue(
-                id=subject.id,
-                name=subject.name,
-                start_date=subject.start_date,
-                schedule_type=subject.schedule_type,
-                custom_intervals_days=subject.custom_intervals_days,
-                created_at=subject.created_at,
-                updated_at=subject.updated_at,
-                next_due_date=next_due,
-                intervals=intervals,
-                revision_number=revision_number,
-                total_revisions=total_revisions,
-                is_completed=is_completed,
-            ))
-            total_count += 1
+        reviews[date_str] = [ReviewEvent(**event) for event in events]
+        total_count += len(events)
     
     return UpcomingReviewsResponse(
         start_date=today,
@@ -209,30 +177,15 @@ def get_reviews_in_range(
             detail=f"Date range too large. Maximum allowed: {MAX_RANGE_DAYS} days"
         )
     
-    # Get due subjects in range
-    due_by_date = review_service.get_subjects_due_in_range(start, end)
-    
-    # Convert to response format with simplified subject info
+    due_by_date = review_service.get_review_events_in_range(start, end, tz)
+
     items: dict[str, list[CalendarSubject]] = {}
     total_count = 0
-    
-    for date_key, subjects in due_by_date.items():
+
+    for date_key, events in due_by_date.items():
         date_str = date_key.isoformat()
-        items[date_str] = []
-        
-        for subject in subjects:
-            revision_number = review_service.get_revision_number(subject, date_key)
-            total_revisions = review_service.get_total_revisions(subject)
-            
-            items[date_str].append(CalendarSubject(
-                subject_id=str(subject.id),
-                subject_name=subject.name,
-                start_date=subject.start_date,
-                schedule_type=subject.schedule_type.value,
-                revision_number=revision_number or 0,
-                total_revisions=total_revisions,
-            ))
-            total_count += 1
+        items[date_str] = [CalendarSubject(**event) for event in events]
+        total_count += len(events)
     
     return RangeReviewsResponse(
         timezone=tz,
@@ -241,3 +194,57 @@ def get_reviews_in_range(
         items=items,
         total_count=total_count,
     )
+
+
+@router.post("/events/complete")
+def complete_review_event(
+    data: ReviewEventCompleteRequest,
+    review_service: ReviewService = Depends(get_review_service),
+):
+    """
+    Mark a review event as completed or not completed.
+    """
+    try:
+        event = review_service.set_event_completion(
+            subject_id=data.subject_id,
+            due_date=data.due_date,
+            is_completed=data.is_completed,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return {"status": "ok", "event_id": event.id, "is_completed": event.is_completed}
+
+
+@router.post("/events/reschedule")
+def reschedule_review_event(
+    data: ReviewEventRescheduleRequest,
+    review_service: ReviewService = Depends(get_review_service),
+    tz: str = Query(
+        default=settings.default_timezone,
+        description="Timezone for date calculations",
+        alias="tz"
+    ),
+):
+    """
+    Reschedule a missed review event to a new date.
+    """
+    today = review_service.get_today(tz)
+    if data.new_date < today:
+        raise HTTPException(status_code=400, detail="Reschedule date must be today or later")
+
+    try:
+        event = review_service.reschedule_event(
+            subject_id=data.subject_id,
+            due_date=data.due_date,
+            new_date=data.new_date,
+            timezone=tz,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return {
+        "status": "ok",
+        "event_id": event.id,
+        "rescheduled_to": event.rescheduled_to,
+    }

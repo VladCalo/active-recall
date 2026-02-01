@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/dialog'
 import {
   getReviewsInRange,
+  completeReviewEvent,
   type RangeReviewsResponse,
   type CalendarSubject,
 } from '@/lib/api'
@@ -49,10 +50,6 @@ const MONTHS = [
  * Format subject name with revision number.
  */
 function formatSubjectWithRevision(subject: CalendarSubject): string {
-  if (subject.revision_number === subject.total_revisions) {
-    // Last revision - could show checkmark but we show number for consistency
-    return `${subject.subject_name} ${subject.revision_number}`
-  }
   return `${subject.subject_name} ${subject.revision_number}`
 }
 
@@ -188,6 +185,19 @@ export function Calendar() {
       setLoading(false)
     }
   }, [dateRange])
+
+  const handleToggleComplete = useCallback(
+    async (event: CalendarSubject) => {
+      try {
+        await completeReviewEvent(event.subject_id, event.due_date, !event.is_completed)
+        fetchReviews()
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to update event'
+        setError(message)
+      }
+    },
+    [fetchReviews]
+  )
   
   useEffect(() => {
     fetchReviews()
@@ -350,6 +360,7 @@ export function Calendar() {
           loading={loading}
           getSubjectsForDay={getSubjectsForDay}
           onDayClick={(date) => setSelectedDay(formatDateKey(date))}
+          onToggleComplete={handleToggleComplete}
         />
       ) : (
         <AgendaView
@@ -358,6 +369,7 @@ export function Calendar() {
           loading={loading}
           currentMonth={month}
           currentYear={year}
+          onToggleComplete={handleToggleComplete}
         />
       )}
       
@@ -384,11 +396,29 @@ export function Calendar() {
                   )}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium">{formatSubjectWithRevision(subject)}</span>
-                    <Badge variant="outline" className="text-xs">
-                      {subject.revision_number}/{subject.total_revisions}
-                    </Badge>
+                    <span className={cn("font-medium", subject.is_completed && "line-through text-muted-foreground")}>
+                      {formatSubjectWithRevision(subject)}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => handleToggleComplete(subject)}
+                        aria-label={subject.is_completed ? "Mark incomplete" : "Mark complete"}
+                      >
+                        {subject.is_completed ? "✓" : ""}
+                      </Button>
+                      <Badge variant="outline" className="text-xs">
+                        {subject.revision_number}/{subject.total_revisions}
+                      </Badge>
+                    </div>
                   </div>
+                  {subject.is_missed && (
+                    <Badge variant="destructive" className="text-xs w-fit">
+                      Missed → moved
+                    </Badge>
+                  )}
                   <p className="text-xs mt-1 opacity-75">
                     Started: {formatDisplayDate(subject.start_date)}
                   </p>
@@ -410,11 +440,13 @@ function MonthView({
   loading,
   getSubjectsForDay,
   onDayClick,
+  onToggleComplete,
 }: {
   calendarDays: ReturnType<typeof getCalendarDays>
   loading: boolean
   getSubjectsForDay: (date: Date) => CalendarSubject[]
   onDayClick: (date: Date) => void
+  onToggleComplete: (event: CalendarSubject) => void
 }) {
   return (
     <Card>
@@ -474,7 +506,20 @@ function MonthView({
                               getSubjectColor(subject.subject_id)
                             )}
                           >
-                            {formatSubjectWithRevision(subject)}
+                            <button
+                              type="button"
+                              className="mr-1 h-4 w-4 border rounded text-[10px] flex items-center justify-center"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                onToggleComplete(subject)
+                              }}
+                              aria-label={subject.is_completed ? "Mark incomplete" : "Mark complete"}
+                            >
+                              {subject.is_completed ? "✓" : ""}
+                            </button>
+                            <span className={cn(subject.is_completed && "line-through opacity-70")}>
+                              {formatSubjectWithRevision(subject)}
+                            </span>
                           </div>
                         ))}
                         {subjects.length > 2 && (
@@ -511,12 +556,14 @@ function AgendaView({
   loading,
   currentMonth,
   currentYear,
+  onToggleComplete,
 }: {
   reviewDates: string[]
   filteredItems: Record<string, CalendarSubject[]>
   loading: boolean
   currentMonth: number
   currentYear: number
+  onToggleComplete: (event: CalendarSubject) => void
 }) {
   // Filter to only show dates in current month
   const monthDates = reviewDates.filter((dateStr) => {
@@ -582,10 +629,28 @@ function AgendaView({
                       getSubjectColor(subject.subject_id)
                     )}
                   >
-                    <span className="font-medium text-sm">{formatSubjectWithRevision(subject)}</span>
-                    <Badge variant="outline" className="text-xs">
-                      {subject.revision_number}/{subject.total_revisions}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => onToggleComplete(subject)}
+                        aria-label={subject.is_completed ? "Mark incomplete" : "Mark complete"}
+                      >
+                        {subject.is_completed ? "✓" : ""}
+                      </Button>
+                      <span className={cn("font-medium text-sm", subject.is_completed && "line-through text-muted-foreground")}>
+                        {formatSubjectWithRevision(subject)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {subject.is_missed && (
+                        <Badge variant="destructive" className="text-xs">Missed</Badge>
+                      )}
+                      <Badge variant="outline" className="text-xs">
+                        {subject.revision_number}/{subject.total_revisions}
+                      </Badge>
+                    </div>
                   </div>
                 ))}
               </div>

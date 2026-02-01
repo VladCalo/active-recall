@@ -11,8 +11,8 @@ import { Calendar, BookOpen, Clock, Sparkles, RefreshCw, AlertTriangle } from 'l
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { getTodayReviews, type Subject, type TodayReviewsResponse } from '@/lib/api'
-import { formatDate, formatIntervals } from '@/lib/utils'
+import { getTodayReviews, completeReviewEvent, rescheduleReviewEvent, type ReviewEvent, type TodayReviewsResponse } from '@/lib/api'
+import { formatDate } from '@/lib/utils'
 
 export function Dashboard() {
   const [data, setData] = useState<TodayReviewsResponse | null>(null)
@@ -88,7 +88,7 @@ export function Dashboard() {
             <CardTitle className="text-lg sm:text-xl">Today&apos;s Reviews</CardTitle>
           </div>
           <CardDescription className="text-sm">
-            {data ? `${data.count} subject${data.count !== 1 ? 's' : ''} to review today` : 'Loading...'}
+          {data ? `${data.count} event${data.count !== 1 ? 's' : ''} to review today` : 'Loading...'}
           </CardDescription>
         </CardHeader>
         <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0">
@@ -113,10 +113,10 @@ export function Dashboard() {
                 Try Again
               </Button>
             </div>
-          ) : data && data.subjects.length > 0 ? (
+          ) : data && data.events.length > 0 ? (
             <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {data.subjects.map((subject) => (
-                <SubjectReviewCard key={subject.id} subject={subject} />
+              {data.events.map((event) => (
+                <SubjectReviewCard key={`${event.subject_id}-${event.due_date}`} event={event} onRefresh={fetchReviews} />
               ))}
             </div>
           ) : (
@@ -148,50 +148,134 @@ export function Dashboard() {
 /**
  * Helper function to format subject name with revision number.
  */
-function formatSubjectWithRevision(subject: Subject): string {
-  if (subject.is_completed) {
-    return `${subject.name} ✓`
+function formatSubjectWithRevision(event: ReviewEvent): string {
+  if (event.is_completed) {
+    return `${event.subject_name} ✓`
   }
-  if (subject.revision_number) {
-    return `${subject.name} ${subject.revision_number}`
-  }
-  return subject.name
+  return `${event.subject_name} ${event.revision_number}`
 }
 
 /**
  * Card component for a single subject due for review.
  */
-function SubjectReviewCard({ subject }: { subject: Subject }) {
+function SubjectReviewCard({
+  event,
+  onRefresh,
+}: {
+  event: ReviewEvent
+  onRefresh: () => void
+}) {
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [showReschedule, setShowReschedule] = useState(false)
+  const [newDate, setNewDate] = useState<string>('')
+
+  const handleToggleComplete = async () => {
+    setIsUpdating(true)
+    try {
+      await completeReviewEvent(event.subject_id, event.due_date, !event.is_completed)
+      onRefresh()
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
+  const handleReschedule = async () => {
+    if (!newDate) return
+    setIsUpdating(true)
+    try {
+      await rescheduleReviewEvent(event.subject_id, event.due_date, newDate)
+      setShowReschedule(false)
+      setNewDate('')
+      onRefresh()
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
   return (
     <Card className="hover:shadow-md transition-shadow">
       <CardHeader className="pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
         <div className="flex items-start justify-between gap-2">
           <CardTitle className="text-base sm:text-lg leading-tight">
-            {formatSubjectWithRevision(subject)}
+            <span className={event.is_completed ? 'line-through text-muted-foreground' : ''}>
+              {formatSubjectWithRevision(event)}
+            </span>
           </CardTitle>
-          <Badge 
-            variant={subject.schedule_type === 'CUSTOM' ? 'secondary' : 'outline'}
-            className="text-xs flex-shrink-0"
-          >
-            {subject.schedule_type}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleToggleComplete}
+              disabled={isUpdating}
+              className="h-7 w-7"
+              aria-label={event.is_completed ? 'Mark incomplete' : 'Mark complete'}
+            >
+              {event.is_completed ? '✓' : ''}
+            </Button>
+            <Badge 
+              variant={event.schedule_type === 'CUSTOM' ? 'secondary' : 'outline'}
+              className="text-xs flex-shrink-0"
+            >
+              {event.schedule_type}
+            </Badge>
+          </div>
         </div>
-        {subject.revision_number && !subject.is_completed && (
+        <div className="flex items-center gap-2">
           <p className="text-xs text-muted-foreground">
-            Review {subject.revision_number} of {subject.total_revisions}
+            Review {event.revision_number} of {event.total_revisions}
+          </p>
+          {event.is_missed && (
+            <Badge variant="destructive" className="text-xs">
+              Missed → moved to today
+            </Badge>
+          )}
+        </div>
+        {event.is_missed && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-2 w-fit"
+            onClick={() => setShowReschedule(true)}
+          >
+            Reschedule
+          </Button>
+        )}
+        {!event.is_missed && !event.is_completed && (
+          <p className="text-xs text-muted-foreground">
+            Due date: {formatDate(event.due_date)}
           </p>
         )}
       </CardHeader>
       <CardContent className="space-y-1.5 sm:space-y-2 px-3 sm:px-6 pb-3 sm:pb-6">
         <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground">
           <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
-          <span className="truncate">Started: {formatDate(subject.start_date)}</span>
+          <span className="truncate">Started: {formatDate(event.start_date)}</span>
         </div>
         <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground">
           <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
-          <span className="truncate">Intervals: {formatIntervals(subject.intervals)} days</span>
+          <span className="truncate">
+            Original due: {formatDate(event.due_date)}
+          </span>
         </div>
       </CardContent>
+      {showReschedule && (
+        <div className="px-3 sm:px-6 pb-3 sm:pb-6">
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={newDate}
+              onChange={(e) => setNewDate(e.target.value)}
+              className="border rounded px-2 py-1 text-sm"
+            />
+            <Button size="sm" onClick={handleReschedule} disabled={!newDate || isUpdating}>
+              Save
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setShowReschedule(false)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
     </Card>
   )
 }

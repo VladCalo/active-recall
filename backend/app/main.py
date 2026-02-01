@@ -88,9 +88,24 @@ async def lifespan(app: FastAPI):
     # Run database migrations
     run_migrations()
     
-    # Seed admin user
+    # Initialize tracking start date for existing users
     db = SessionLocal()
     try:
+        if os.environ.get("TESTING") != "1":
+            from datetime import datetime
+            from app.models.user import User
+            from app.config import get_settings
+            from zoneinfo import ZoneInfo
+
+            tz = ZoneInfo(get_settings().default_timezone)
+            today = datetime.now(tz).date()
+
+            db.query(User).filter(User.review_tracking_start_date.is_(None)).update(
+                {"review_tracking_start_date": today}
+            )
+            db.commit()
+
+        # Seed admin user
         created, message = seed_admin_user(db)
         if created:
             logger.info("admin_user_seeded", message=message)

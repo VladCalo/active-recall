@@ -326,11 +326,18 @@ def seed_admin_user(db: Session) -> tuple[bool, str]:
                 )
     
     # Create admin user
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    tz = ZoneInfo(settings.default_timezone)
+    today = datetime.now(tz).date()
+
     admin_user = User(
         email=settings.admin_email.lower(),
         password_hash=hash_password(settings.admin_password),
         is_admin=True,
         is_disabled=False,
+        review_tracking_start_date=today,
     )
     
     db.add(admin_user)

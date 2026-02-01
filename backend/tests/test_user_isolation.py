@@ -115,7 +115,7 @@ class TestReviewsIsolation:
         data = response.json()
         
         # Check that no other user's subjects are included
-        subject_ids = [s["id"] for s in data["subjects"]]
+        subject_ids = [s["subject_id"] for s in data["events"]]
         assert other_user_subject.id not in subject_ids
 
     def test_upcoming_reviews_only_shows_own_subjects(
@@ -137,7 +137,7 @@ class TestReviewsIsolation:
         # Collect all subject IDs from all dates
         all_subject_ids = []
         for date_subjects in data["reviews"].values():
-            all_subject_ids.extend([s["id"] for s in date_subjects])
+            all_subject_ids.extend([s["subject_id"] for s in date_subjects])
         
         assert other_user_subject.id not in all_subject_ids
 

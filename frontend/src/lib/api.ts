@@ -302,12 +302,17 @@ function getErrorMessage(error: unknown): string {
   }
   if (error instanceof AxiosError) {
     if (error.response?.data?.detail) {
-      return error.response.data.detail
+      const detail = error.response.data.detail
+      return typeof detail === 'string' ? detail : JSON.stringify(detail)
     }
     if (error.response?.status === 429) {
       return 'Too many requests. Please try again later.'
     }
-    if (error.message) {
+    // Network error, CORS, or no response (e.g. backend unreachable)
+    if (!error.response && error.message) {
+      if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
+        return 'Cannot reach the server. Check that the backend is running and CORS allows this origin.'
+      }
       return error.message
     }
   }

@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@/contexts/AuthContext'
+import { RateLimitError } from '@/lib/api'
 
 export function Login() {
   const [email, setEmail] = useState('')
@@ -41,10 +42,9 @@ export function Login() {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Login failed'
       setError(message)
-      
-      // Check for rate limiting
-      if (message.toLowerCase().includes('too many') || message.toLowerCase().includes('rate limit')) {
-        // Extract retry time if available (default 5 minutes)
+      if (err instanceof RateLimitError) {
+        setRetryAfter(err.retryAfter)
+      } else if (message.toLowerCase().includes('too many') || message.toLowerCase().includes('rate limit')) {
         setRetryAfter(300)
       }
     } finally {

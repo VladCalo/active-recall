@@ -53,7 +53,8 @@ services:
       - CSRF_SECRET_KEY=${CSRF_SECRET_KEY:?CSRF_SECRET_KEY is required}
       - COOKIE_SECURE=${COOKIE_SECURE:-false}
       - COOKIE_SAMESITE=lax
-      - CORS_ORIGINS=${CORS_ORIGINS}
+      # Include your access URL if you use IP, e.g. ["http://rpi5.local","http://192.168.1.50"]
+      - CORS_ORIGINS=${CORS_ORIGINS:-["http://rpi5.local","http://rpi5"]}
       - MIN_PASSWORD_LENGTH=10
       - RATE_LIMIT_LOGIN=${RATE_LIMIT_LOGIN:-20/5minute}
       # Admin account - CHANGE THESE IN PRODUCTION!

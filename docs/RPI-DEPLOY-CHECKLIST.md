@@ -22,8 +22,9 @@ CSRF_SECRET_KEY=<paste-32-char-secret>
 ADMIN_ALLOW_DEFAULT=true
 # Or: ADMIN_EMAIL=youradmin  and  ADMIN_PASSWORD=your-secure-password
 
-# Optional – only if frontend is on another host/port
-# CORS_ORIGINS=["http://rpi5.local","http://192.168.x.x"]
+# If you access the app by IP (e.g. http://192.168.1.50), set CORS so login works:
+# CORS_ORIGINS=["http://rpi5.local","http://192.168.1.50"]
+# Default in prod is ["http://rpi5.local","http://rpi5"].
 ```
 
 Generate secrets on the Pi:

@@ -45,7 +45,7 @@ services:
       - "7070:7070"
     environment:
       - ENVIRONMENT=production
-      - DEBUG=false
+      - DEBUG=${DEBUG:-false}
       - DATABASE_URL=sqlite:////data/active-recall.db
       - REDIS_URL=redis://redis:6379/0
       - DEFAULT_TIMEZONE=Europe/Bucharest

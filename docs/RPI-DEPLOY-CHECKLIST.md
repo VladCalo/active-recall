@@ -111,6 +111,13 @@ Log in with your admin user (or `adminvladcalo` / `Adminvladcalo123!` if you set
 3. If you see DB/volume errors → ensure `/mnt/ssd/apps/active-recall/data/db` exists and is writable:
    ```bash
    mkdir -p /mnt/ssd/apps/active-recall/data/db
+   chown -R 1000:1000 /mnt/ssd/apps/active-recall/data
+   ```
+4. **Bad migration state** (repeated "Running upgrade -> 001" in logs) – pull latest code (stamp + resilient startup), rebuild, restart. If it still loops, reset DB (deletes all data):
+   ```bash
+   docker compose --env-file "$ENV_FILE" down
+   rm -f /mnt/ssd/apps/active-recall/data/db/active-recall.db
+   docker compose --env-file "$ENV_FILE" up -d
    ```
 
 ---

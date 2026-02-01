@@ -65,6 +65,12 @@ def run_migrations():
             # Fall back to create_all for new databases
             logger.info("falling_back_to_create_all")
             Base.metadata.create_all(bind=engine)
+            # Stamp so next startup doesn't re-run failed migration (e.g. tables already exist)
+            try:
+                alembic_command.stamp(alembic_cfg, "head")
+                logger.info("alembic_stamped_head")
+            except Exception as stamp_err:
+                logger.warning("alembic_stamp_failed", error=str(stamp_err))
     else:
         # No alembic.ini, use create_all
         logger.info("no_alembic_ini_using_create_all")
@@ -88,7 +94,7 @@ async def lifespan(app: FastAPI):
     # Run database migrations
     run_migrations()
     
-    # Initialize tracking start date for existing users
+    # Initialize tracking start date for existing users; then seed admin
     db = SessionLocal()
     try:
         if os.environ.get("TESTING") != "1":
@@ -97,13 +103,17 @@ async def lifespan(app: FastAPI):
             from app.config import get_settings
             from zoneinfo import ZoneInfo
 
-            tz = ZoneInfo(get_settings().default_timezone)
-            today = datetime.now(tz).date()
-
-            db.query(User).filter(User.review_tracking_start_date.is_(None)).update(
-                {"review_tracking_start_date": today}
-            )
-            db.commit()
+            try:
+                tz = ZoneInfo(get_settings().default_timezone)
+                today = datetime.now(tz).date()
+                db.query(User).filter(User.review_tracking_start_date.is_(None)).update(
+                    {"review_tracking_start_date": today}
+                )
+                db.commit()
+            except Exception as e:
+                # Column may not exist on old DB; don't crash startup
+                logger.warning("review_tracking_start_date_init_skipped", error=str(e))
+                db.rollback()
 
         # Seed admin user
         created, message = seed_admin_user(db)

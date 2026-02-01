@@ -261,11 +261,14 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
     """Handle unexpected errors without leaking internals."""
+    import traceback
+    # Always log the real error server-side (for docker logs); never expose to client in prod
     logger.error(
         "unhandled_exception",
         path=request.url.path,
         method=request.method,
-        error=str(exc) if settings.debug else "Internal error"
+        error=str(exc),
+        traceback=traceback.format_exc()
     )
     
     if settings.debug:

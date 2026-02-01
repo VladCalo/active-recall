@@ -114,7 +114,12 @@ Log in with your admin user (or `adminvladcalo` / `Adminvladcalo123!` if you set
    mkdir -p /mnt/ssd/apps/active-recall/data/db
    chown -R 1000:1000 /mnt/ssd/apps/active-recall/data
    ```
-4. **Bad migration state** (repeated "Running upgrade -> 001" in logs) – pull latest code (stamp + resilient startup), rebuild, restart. If it still loops, reset DB (deletes all data):
+4. **"An unexpected error occurred" on login** – backend is returning 500. After trying to log in, run:
+   ```bash
+   docker compose --env-file "$ENV_FILE" logs backend --tail 100
+   ```
+   Look for `unhandled_exception` and the `traceback` line to see the real error (e.g. missing column, JWT issue).
+5. **Bad migration state** (repeated "Running upgrade -> 001" in logs) – pull latest code (stamp + resilient startup), rebuild, restart. If it still loops, reset DB (deletes all data):
    ```bash
    docker compose --env-file "$ENV_FILE" down
    rm -f /mnt/ssd/apps/active-recall/data/db/active-recall.db

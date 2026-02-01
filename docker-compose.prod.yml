@@ -55,6 +55,7 @@ services:
       - COOKIE_SAMESITE=lax
       - CORS_ORIGINS=${CORS_ORIGINS}
       - MIN_PASSWORD_LENGTH=10
+      - RATE_LIMIT_LOGIN=${RATE_LIMIT_LOGIN:-20/5minute}
       # Admin account - CHANGE THESE IN PRODUCTION!
       - ADMIN_EMAIL=${ADMIN_EMAIL:-adminvladcalo}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-Adminvladcalo123!}

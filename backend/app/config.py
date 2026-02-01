@@ -69,7 +69,7 @@ class Settings(BaseSettings):
     # Rate Limiting (configurable via env)
     # ==========================================================================
     # Auth endpoints
-    rate_limit_login: str = "5/5minute"         # 5 attempts per 5 minutes
+    rate_limit_login: str = "20/5minute"       # 20 attempts per 5 minutes (per client IP)
     rate_limit_register: str = "3/10minute"      # 3 registrations per 10 minutes
     rate_limit_refresh: str = "30/minute"        # 30 refreshes per minute
     

@@ -37,15 +37,26 @@ def get_redis_storage():
     return None
 
 
+def get_client_ip(request: Request) -> str:
+    """
+    Client IP for rate limiting. Uses X-Forwarded-For when behind a reverse proxy
+    (e.g. nginx) so each user gets their own limit instead of sharing one.
+    """
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return get_remote_address(request)
+
+
 # Create limiter with Redis or in-memory storage
 _storage = get_redis_storage()
 if _storage:
     limiter = Limiter(
-        key_func=get_remote_address,
+        key_func=get_client_ip,
         storage_uri=settings.redis_url,
     )
 else:
-    limiter = Limiter(key_func=get_remote_address)
+    limiter = Limiter(key_func=get_client_ip)
 
 
 def get_user_identifier(request: Request) -> str:

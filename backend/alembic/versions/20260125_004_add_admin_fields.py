@@ -1,7 +1,7 @@
 """Add admin and disabled fields to users
 
 Revision ID: 20260125_004
-Revises: 20260125_003
+Revises: 003
 Create Date: 2026-01-25
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '20260125_004'
-down_revision: Union[str, None] = '20260125_003'
+down_revision: Union[str, None] = '003'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

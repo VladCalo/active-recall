@@ -1,7 +1,7 @@
 """
 Database configuration and session management.
 
-This module sets up SQLAlchemy 2.0 with SQLite and provides:
+This module sets up SQLAlchemy 2.0 and provides:
 - Engine configuration
 - Session factory
 - Dependency injection for FastAPI routes

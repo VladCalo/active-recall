@@ -10,23 +10,11 @@ A production-ready, security-hardened web application for tracking study subject
 - **Rate Limiting**: Redis-backed (with in-memory fallback) to prevent abuse
 - **Calendar View**: Visual calendar showing upcoming review due dates with month/agenda views
 - **Responsive UI**: Works on phones, tablets, and desktops
-- **Production Ready**: Docker Compose deployment with health checks
+- **Kubernetes Native**: Deployed on k3s via ArgoCD GitOps ([k3s-rpi5](https://github.com/VladCalo/k3s-rpi5) repo)
 
 ## Quick Start
 
-### One-Command Local Development
-
-```bash
-# Install dependencies (first time only)
-./run.sh setup
-
-# Start everything (backend on 7070, frontend on 5173)
-./run.sh
-```
-
-Then open: **http://localhost:5173**
-
-### Manual Setup
+### Local Development
 
 **Backend (Terminal 1):**
 ```bash
@@ -44,24 +32,15 @@ npm install
 npm run dev
 ```
 
-### Docker Compose
-
-```bash
-# Generate required secrets
-export JWT_SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(64))")
-export CSRF_SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
-
-# Start all services
-docker-compose up --build
-```
+Then open: **http://localhost:5173**
 
 ## Architecture
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Frontend  │────▶│   Backend   │────▶│   SQLite    │
-│  React/Vite │     │   FastAPI   │     │  (or PG)    │
-│  Port 5173  │     │  Port 7070  │     └─────────────┘
+│   Frontend  │────▶│   Backend   │────▶│  PostgreSQL │
+│  React/Vite │     │   FastAPI   │     └─────────────┘
+│  Port 5173  │     │  Port 7070  │
 └─────────────┘     └──────┬──────┘
                           │
                           ▼
@@ -207,167 +186,21 @@ pytest tests/test_user_isolation.py -v
 
 ## Production Deployment
 
+This app is deployed to a k3s cluster via ArgoCD GitOps — see the [k3s-rpi5](https://github.com/VladCalo/k3s-rpi5)
+repo (`apps/active-recall2/`) for the actual Kubernetes manifests (Postgres, Redis, backend, frontend,
+HTTPRoute, ExternalSecret). There is no docker-compose or shell-script deployment path in this repo;
+building images and pushing them to the in-cluster registry is the only supported flow.
+
 ### Security Checklist
 
-Before deploying to production:
+Before deploying:
 
-- [ ] **Generate secure secrets**
-  ```bash
-  export JWT_SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(64))")
-  export CSRF_SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
-  ```
-
-- [ ] **Set environment to production**
-  ```bash
-  export ENVIRONMENT=production
-  export DEBUG=false
-  ```
-
-- [ ] **Configure HTTPS cookies**
-  ```bash
-  export COOKIE_SECURE=true
-  export COOKIE_SAMESITE=strict  # or lax
-  ```
-
-- [ ] **Lock down CORS**
-  ```bash
-  export CORS_ORIGINS='["https://yourdomain.com"]'
-  ```
-
-- [ ] **Use PostgreSQL** (recommended for production)
-  ```bash
-  export DATABASE_URL="postgresql://user:pass@host:5432/active_recall"
-  ```
-
+- [ ] **Generate secure secrets** for `JWT_SECRET_KEY` / `CSRF_SECRET_KEY` (stored in Vault, injected via ExternalSecret)
+- [ ] **Set environment to production** (`ENVIRONMENT=production`, `DEBUG=false`)
+- [ ] **Configure HTTPS cookies** (`COOKIE_SECURE=true`, `COOKIE_SAMESITE=strict`)
+- [ ] **Lock down CORS** to the actual hostname
+- [ ] **Use PostgreSQL** — `DATABASE_URL=postgresql://user:pass@host:5432/active_recall`
 - [ ] **Deploy Redis** for distributed rate limiting
-
-- [ ] **Use reverse proxy** (nginx/caddy) with HTTPS
-
-- [ ] **Set up monitoring** for auth failure events
-
-### Docker Production Deployment
-
-```bash
-# Create .env file with production values
-cat > .env << 'EOF'
-ENVIRONMENT=production
-DEBUG=false
-JWT_SECRET_KEY=your-64-char-secret-here
-CSRF_SECRET_KEY=your-32-char-secret-here
-COOKIE_SECURE=true
-COOKIE_SAMESITE=strict
-CORS_ORIGINS=["https://yourdomain.com"]
-EOF
-
-# Deploy
-docker-compose up -d
-```
-
-### Nginx Configuration (HTTPS)
-
-```nginx
-server {
-    listen 443 ssl http2;
-    server_name yourdomain.com;
-
-    ssl_certificate /path/to/cert.pem;
-    ssl_certificate_key /path/to/key.pem;
-
-    # Frontend
-    location / {
-        proxy_pass http://localhost:5173;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    # Backend API
-    location /api {
-        proxy_pass http://localhost:7070;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-
-### Raspberry Pi 5 / VM Deployment
-
-#### First-Time Deploy
-
-```bash
-# Clone the repo
-cd /mnt/ssd/github
-git clone https://github.com/YOUR_USER/active-recall.git
-cd active-recall
-
-# Deploy (creates dirs, env, systemd service, builds, starts)
-sudo ./deploy-rpi.sh
-
-# Edit CORS to add your IP
-sudo nano /mnt/ssd/apps/active-recall/data/.env
-# Change: CORS_ORIGINS='["http://YOUR_IP","http://localhost"]'
-
-# Restart to apply CORS
-sudo systemctl restart active-recall
-```
-
-The deploy script:
-1. Creates data directories at `/mnt/ssd/apps/active-recall/data/`
-2. Generates secure secrets automatically
-3. Creates a systemd service for auto-start on boot
-4. Builds and starts Docker containers
-
-#### Update After Code Changes
-
-```bash
-cd /mnt/ssd/github/active-recall
-sudo ./update-rpi.sh
-```
-
-This pulls latest code, rebuilds containers, and restarts the app. Database is preserved.
-
-#### Useful Commands
-
-```bash
-# Status
-sudo systemctl status active-recall
-docker ps
-
-# Logs
-sudo journalctl -u active-recall -f
-docker logs active-recall-backend -f
-
-# Restart
-sudo systemctl restart active-recall
-
-# Stop
-sudo systemctl stop active-recall
-```
-
-#### Data Locations
-
-| What | Path |
-|------|------|
-| Database | `/mnt/ssd/apps/active-recall/data/db/active-recall.db` |
-| Redis | `/mnt/ssd/apps/active-recall/data/redis/` |
-| Config | `/mnt/ssd/apps/active-recall/data/.env` |
-| App | `/mnt/ssd/github/active-recall/` |
-
-#### Backup
-
-```bash
-sudo cp /mnt/ssd/apps/active-recall/data/db/active-recall.db ~/backup-$(date +%Y%m%d).db
-```
-
-#### Uninstall
-
-```bash
-sudo ./uninstall-rpi.sh              # Keeps your data
-sudo ./uninstall-rpi.sh --delete-data # Deletes everything
-```
 
 ## Environment Variables
 
@@ -375,7 +208,7 @@ sudo ./uninstall-rpi.sh --delete-data # Deletes everything
 |----------|---------|-------------|
 | `ENVIRONMENT` | development | development/staging/production |
 | `DEBUG` | false | Show detailed errors |
-| `DATABASE_URL` | sqlite:///./app.db | Database connection string |
+| `DATABASE_URL` | sqlite:///./app.db | Database connection string (Postgres in production) |
 | `REDIS_URL` | - | Redis URL for rate limiting |
 | `JWT_SECRET_KEY` | (random) | **REQUIRED in production** |
 | `CSRF_SECRET_KEY` | (random) | **REQUIRED in production** |
@@ -409,8 +242,6 @@ active-recall/
 │   │   ├── pages/         # Page components
 │   │   └── lib/           # API client
 │   └── package.json
-├── docker-compose.yml
-├── run.sh
 └── README.md
 ```
 

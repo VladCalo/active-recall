@@ -38,12 +38,9 @@ ENV PYTHONPATH="/app:$PYTHONPATH"
 # Copy application code
 COPY . .
 
-# Create data directory for SQLite (when mounted as volume)
-RUN mkdir -p /data
-
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash --uid 1000 appuser && \
-    chown -R appuser:appuser /app /data
+    chown -R appuser:appuser /app
 USER appuser
 
 # Expose port 7070

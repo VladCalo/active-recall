@@ -14,7 +14,13 @@ from app.models.user import User
 from app.schemas.subject import SubjectCreate, SubjectUpdate
 from app.config import get_settings
 from app.core.timeutil import today_in_tz
-from app.services.adaptive_engine import DEFAULT_CATEGORY, DEFAULT_STAGE, State, next_due_date
+from app.services.adaptive_engine import (
+    DEFAULT_CATEGORY,
+    DEFAULT_STAGE,
+    State,
+    next_due_date,
+    final_recall_cutoff_date as compute_cutoff_date,
+)
 
 
 class SubjectService:
@@ -32,8 +38,11 @@ class SubjectService:
     def _today(self) -> date:
         return today_in_tz(self.settings.default_timezone)
 
+    def _exam_date(self) -> date:
+        return self.user.exam_date or self.settings.default_exam_date
+
     def _is_reference_mode(self) -> bool:
-        return self._today() >= self.settings.final_recall_cutoff_date
+        return self._today() >= compute_cutoff_date(self._exam_date())
 
     def _apply_forced_cutover(self, subject: Subject) -> Subject:
         """

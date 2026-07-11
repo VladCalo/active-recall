@@ -142,3 +142,4 @@ logs/
 
 # Local buildx builder config (insecure-registry trust for the Pi registry)
 .buildkitd.toml
+HANDOFF.md

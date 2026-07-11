@@ -10,7 +10,7 @@ Security considerations:
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional, TYPE_CHECKING
 from sqlalchemy import String, Date, DateTime, Integer, Boolean, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -100,6 +100,11 @@ class User(Base):
         DateTime,
         nullable=True
     )
+
+    # Exam-cycle setting: when null, app.config.default_exam_date is used.
+    # Final Active Recall cutoff and Reference Mode end are both derived
+    # from this (see app.services.adaptive_engine).
+    exam_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
     # Relationships
     subjects: Mapped[list["Subject"]] = relationship(

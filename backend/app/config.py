@@ -107,13 +107,11 @@ class Settings(BaseSettings):
     # ==========================================================================
     # Final Active Recall / Reference Mode
     # ==========================================================================
-    # On/after this date, a chapter's next computed interval pushes it into
-    # Final Active Recall instead of scheduling another session.
-    final_recall_cutoff_date: date = date(2026, 10, 13)
-    # End of the Reference Mode / final rereading window.
-    reference_mode_end_date: date = date(2026, 11, 12)
-    # Used for the "days remaining" dashboard stat.
-    exam_date: date = date(2026, 11, 13)
+    # Fallback exam date used when a user hasn't set their own (see
+    # User.exam_date). Final Active Recall cutoff and Reference Mode end are
+    # both derived from whichever exam date is in effect - see
+    # app.services.adaptive_engine.final_recall_cutoff_date/reference_mode_end_date.
+    default_exam_date: date = date(2026, 11, 13)
 
     # ==========================================================================
     # Admin Account Configuration

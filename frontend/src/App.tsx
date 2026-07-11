@@ -13,6 +13,7 @@ import { Layout } from '@/components/Layout'
 import { Dashboard } from '@/pages/Dashboard'
 import { Subjects } from '@/pages/Subjects'
 import { Calendar } from '@/pages/Calendar'
+import { Settings } from '@/pages/Settings'
 import { Admin } from '@/pages/Admin'
 import { Login } from '@/pages/Login'
 import { Register } from '@/pages/Register'
@@ -103,6 +104,16 @@ function AppRoutes() {
           <ProtectedRoute>
             <Layout>
               <Calendar />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/settings"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <Settings />
             </Layout>
           </ProtectedRoute>
         }

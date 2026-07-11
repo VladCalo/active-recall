@@ -19,6 +19,9 @@ from app.services.adaptive_engine import (
     is_final_active_recall,
     DEFAULT_CATEGORY,
     DEFAULT_STAGE,
+    shift_off_sunday,
+    final_recall_cutoff_date,
+    reference_mode_end_date,
 )
 
 
@@ -100,9 +103,9 @@ class TestTransitionTable:
 class TestNextDueDate:
     def test_counts_from_completion_date_not_original_due_date(self):
         """Missed days: next interval always counts from actual completion."""
-        completion = date(2026, 3, 10)
+        completion = date(2026, 3, 9)  # Monday, so +5 days doesn't collide with Sunday
         state = State(Category.MEDIUM, 0)
-        assert next_due_date(completion, state) == date(2026, 3, 15)  # +5 days
+        assert next_due_date(completion, state) == date(2026, 3, 14)  # +5 days
 
 
 class TestFinalActiveRecallDetection:
@@ -134,3 +137,33 @@ class TestFinalActiveRecallDetection:
         state = State(Category.MEDIUM, 0)  # +5 days -> Oct 12
         assert next_due_date(completion, state) == date(2026, 10, 12)
         assert is_final_active_recall(completion, state, cutoff) is False
+
+
+class TestSundayShift:
+    def test_sunday_shifts_to_monday(self):
+        assert shift_off_sunday(date(2026, 1, 25)) == date(2026, 1, 26)  # Sun -> Mon
+
+    def test_non_sunday_unchanged(self):
+        assert shift_off_sunday(date(2026, 1, 26)) == date(2026, 1, 26)  # Mon stays Mon
+
+    def test_next_due_date_shifts_off_sunday(self):
+        """Medium stage0 (+5 days) from 2026-01-20 (Tue) lands on 2026-01-25 (Sun) -> Mon 26."""
+        completion = date(2026, 1, 20)
+        assert completion.strftime("%A") == "Tuesday"
+        result = next_due_date(completion, State(Category.MEDIUM, 0))
+        assert result == date(2026, 1, 26)
+
+    def test_final_recall_detection_uses_shifted_date(self):
+        """The cutoff check must use the post-shift date, not the raw pre-shift Sunday."""
+        cutoff = date(2026, 1, 26)  # exactly the shifted Monday
+        completion = date(2026, 1, 20)
+        state = State(Category.MEDIUM, 0)  # raw target is Sunday 1/25, shifted to Mon 1/26
+        assert is_final_active_recall(completion, state, cutoff) is True
+
+
+class TestExamDateDerivedDates:
+    def test_final_recall_cutoff_is_31_days_before_exam(self):
+        assert final_recall_cutoff_date(date(2026, 11, 13)) == date(2026, 10, 13)
+
+    def test_reference_mode_end_is_1_day_before_exam(self):
+        assert reference_mode_end_date(date(2026, 11, 13)) == date(2026, 11, 12)

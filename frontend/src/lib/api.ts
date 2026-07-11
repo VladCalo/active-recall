@@ -118,6 +118,12 @@ export interface ReferenceModeSummary {
   exam_date: string
 }
 
+export interface ExamSettings {
+  exam_date: string
+  final_recall_cutoff_date: string
+  reference_mode_end_date: string
+}
+
 export interface User {
   id: string
   email: string
@@ -498,6 +504,24 @@ export async function getReferenceModeSummary(): Promise<ReferenceModeSummary> {
 export async function completeReread(subjectId: string): Promise<ReferenceModeChapter> {
   try {
     const response = await api.post<ReferenceModeChapter>(`/reference-mode/${subjectId}/complete-reread`)
+    return response.data
+  } catch (error) {
+    throw new Error(getErrorMessage(error))
+  }
+}
+
+// =============================================================================
+// Settings API Functions
+// =============================================================================
+
+export async function getExamSettings(): Promise<ExamSettings> {
+  const response = await api.get<ExamSettings>('/settings')
+  return response.data
+}
+
+export async function updateExamSettings(examDate: string): Promise<ExamSettings> {
+  try {
+    const response = await api.put<ExamSettings>('/settings', { exam_date: examDate })
     return response.data
   } catch (error) {
     throw new Error(getErrorMessage(error))

@@ -93,9 +93,20 @@ def apply_rating(current: State, rating: Rating) -> State:
     return _FIXED_TRANSITIONS[key]
 
 
+def shift_off_sunday(d: date) -> date:
+    """No revisions on Sunday - push it to Monday."""
+    if d.weekday() == 6:  # Monday=0 ... Sunday=6
+        return d + timedelta(days=1)
+    return d
+
+
 def next_due_date(completion_date: date, new_state: State) -> date:
-    """The next review date, always counted from the actual completion date."""
-    return completion_date + timedelta(days=get_interval(new_state.category, new_state.stage))
+    """
+    The next review date, always counted from the actual completion date,
+    shifted off Sunday if it would land on one.
+    """
+    raw = completion_date + timedelta(days=get_interval(new_state.category, new_state.stage))
+    return shift_off_sunday(raw)
 
 
 def is_final_active_recall(completion_date: date, new_state: State, cutoff_date: date) -> bool:
@@ -105,6 +116,20 @@ def is_final_active_recall(completion_date: date, new_state: State, cutoff_date:
     review just completed is this chapter's Final Active Recall.
     """
     return next_due_date(completion_date, new_state) >= cutoff_date
+
+
+# Fixed offsets from the exam date (Oct 13 -> Nov 13 is 31 days; Reference
+# Mode ends the day before the exam).
+FINAL_RECALL_CUTOFF_DAYS_BEFORE_EXAM = 31
+REFERENCE_MODE_END_DAYS_BEFORE_EXAM = 1
+
+
+def final_recall_cutoff_date(exam_date: date) -> date:
+    return exam_date - timedelta(days=FINAL_RECALL_CUTOFF_DAYS_BEFORE_EXAM)
+
+
+def reference_mode_end_date(exam_date: date) -> date:
+    return exam_date - timedelta(days=REFERENCE_MODE_END_DAYS_BEFORE_EXAM)
 
 
 REREAD_INTENSITY: dict[Category, dict[str, object]] = {

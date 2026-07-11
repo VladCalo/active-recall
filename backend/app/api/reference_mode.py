@@ -16,11 +16,8 @@ from app.schemas.reference_mode import (
     ReferenceModeChapter,
     ReferenceModeSummary,
 )
-from app.config import get_settings
 
 router = APIRouter(prefix="/api/reference-mode", tags=["reference-mode"])
-
-settings = get_settings()
 
 
 def get_review_service(
@@ -41,7 +38,7 @@ def list_reference_mode_chapters(
     chapters = review_service.get_reference_mode_chapters()
     return ReferenceModeListResponse(
         is_reference_mode=review_service.is_reference_mode(),
-        cutoff_date=settings.final_recall_cutoff_date,
+        cutoff_date=review_service.get_cutoff_date(),
         chapters=[ReferenceModeChapter(**c) for c in chapters],
     )
 

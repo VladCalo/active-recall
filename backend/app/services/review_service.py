@@ -20,6 +20,7 @@ from app.services.adaptive_engine import (
     next_due_date as engine_next_due_date,
     is_final_active_recall,
     REREAD_INTENSITY,
+    final_recall_cutoff_date as compute_cutoff_date,
 )
 from app.config import get_settings
 from app.core.timeutil import today_in_tz
@@ -44,8 +45,18 @@ class ReviewService:
     def get_today(self, timezone: str = None) -> date:
         return today_in_tz(timezone or self.settings.default_timezone)
 
+    def _exam_date(self) -> date:
+        return self.user.exam_date or self.settings.default_exam_date
+
+    def _cutoff_date(self) -> date:
+        return compute_cutoff_date(self._exam_date())
+
+    def get_cutoff_date(self) -> date:
+        """Public accessor for the current user's Final Active Recall cutoff date."""
+        return self._cutoff_date()
+
     def is_reference_mode(self, timezone: str = None) -> bool:
-        return self.get_today(timezone) >= self.settings.final_recall_cutoff_date
+        return self.get_today(timezone) >= self._cutoff_date()
 
     # ------------------------------------------------------------------
     # Phase 1: Adaptive Active Recall
@@ -106,7 +117,7 @@ class ReviewService:
 
         current_state = State(subject.category, subject.stage)
         new_state = apply_rating(current_state, rating)
-        final = is_final_active_recall(completed_at, new_state, self.settings.final_recall_cutoff_date)
+        final = is_final_active_recall(completed_at, new_state, self._cutoff_date())
 
         completion = ReviewCompletion(
             user_id=self.user.id,
@@ -238,7 +249,8 @@ class ReviewService:
         remaining = total - completed
         percentage = (completed / total * 100) if total > 0 else 0.0
         today = self.get_today(timezone)
-        days_remaining = (self.settings.exam_date - today).days
+        exam_date = self._exam_date()
+        days_remaining = (exam_date - today).days
 
         return {
             "is_reference_mode": self.is_reference_mode(timezone),
@@ -246,5 +258,5 @@ class ReviewService:
             "chapters_remaining": remaining,
             "percentage_completed": round(percentage, 1),
             "days_remaining_until_exam": days_remaining,
-            "exam_date": self.settings.exam_date,
+            "exam_date": exam_date,
         }

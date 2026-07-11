@@ -11,9 +11,8 @@ from app.schemas.subject import (
     SubjectCreate,
     SubjectUpdate,
     SubjectResponse,
-    SubjectWithNextDue,
 )
-from app.schemas.review import TodayReviewsResponse, UpcomingReviewsResponse
+from app.schemas.review import TodayReviewsResponse
 from app.schemas.auth import (
     UserRegister,
     UserLogin,
@@ -25,11 +24,9 @@ from app.schemas.auth import (
 
 __all__ = [
     "SubjectCreate",
-    "SubjectUpdate", 
+    "SubjectUpdate",
     "SubjectResponse",
-    "SubjectWithNextDue",
     "TodayReviewsResponse",
-    "UpcomingReviewsResponse",
     "UserRegister",
     "UserLogin",
     "UserResponse",

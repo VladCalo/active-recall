@@ -89,7 +89,6 @@ class TestSubjectIsolation:
             json={
                 "name": sample_subject.name,  # Same name
                 "start_date": "2026-01-25",
-                "schedule_type": "DEFAULT"
             }
         )
         
@@ -110,35 +109,34 @@ class TestReviewsIsolation:
     ):
         """Today's reviews should only include user's own subjects."""
         response = client.get("/api/reviews/today", headers=auth_headers)
-        
+
         assert response.status_code == 200
         data = response.json()
-        
+
         # Check that no other user's subjects are included
-        subject_ids = [s["subject_id"] for s in data["events"]]
+        subject_ids = [s["subject_id"] for s in data["items"]]
         assert other_user_subject.id not in subject_ids
 
-    def test_upcoming_reviews_only_shows_own_subjects(
+    def test_range_reviews_only_shows_own_subjects(
         self,
         client,
         sample_subject,
         other_user_subject,
         auth_headers
     ):
-        """Upcoming reviews should only include user's own subjects."""
+        """Calendar range should only include user's own subjects."""
         response = client.get(
-            "/api/reviews/upcoming?days=30",
+            "/api/reviews/range?start=2026-01-01&end=2026-03-01",
             headers=auth_headers
         )
-        
+
         assert response.status_code == 200
         data = response.json()
-        
-        # Collect all subject IDs from all dates
+
         all_subject_ids = []
-        for date_subjects in data["reviews"].values():
-            all_subject_ids.extend([s["subject_id"] for s in date_subjects])
-        
+        for items in data["items"].values():
+            all_subject_ids.extend([s["subject_id"] for s in items])
+
         assert other_user_subject.id not in all_subject_ids
 
 
@@ -155,7 +153,6 @@ class TestAuthRequired:
         response = client.post("/api/subjects", json={
             "name": "Test",
             "start_date": "2026-01-25",
-            "schedule_type": "DEFAULT"
         })
         assert response.status_code == 401
 
@@ -182,7 +179,14 @@ class TestAuthRequired:
         response = client.get("/api/reviews/today")
         assert response.status_code == 401
 
-    def test_reviews_upcoming_requires_auth(self, client):
-        """GET /api/reviews/upcoming should require authentication."""
-        response = client.get("/api/reviews/upcoming")
+    def test_reviews_range_requires_auth(self, client):
+        """GET /api/reviews/range should require authentication."""
+        response = client.get("/api/reviews/range?start=2026-01-01&end=2026-01-31")
+        assert response.status_code == 401
+
+    def test_reviews_complete_requires_auth(self, client):
+        """POST /api/reviews/complete should require authentication."""
+        response = client.post("/api/reviews/complete", json={
+            "subject_id": "some-id", "rating": "EXCELLENT"
+        })
         assert response.status_code == 401

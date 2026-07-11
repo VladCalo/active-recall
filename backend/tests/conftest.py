@@ -23,9 +23,11 @@ from sqlalchemy.orm import sessionmaker, Session
 from app.main import app
 from app.database import Base, get_db
 from app.models.user import User
-from app.models.subject import Subject, ScheduleType
+from app.models.subject import Subject
+from app.models.enums import Category
 from app.models.refresh_token import RefreshToken
 from app.core.security import hash_password, create_access_token
+from app.services.adaptive_engine import State, next_due_date
 
 
 # Create test database engine (in-memory SQLite with StaticPool for thread safety)
@@ -42,11 +44,11 @@ TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_eng
 def db() -> Generator[Session, None, None]:
     """
     Create a fresh database for each test.
-    
+
     Creates all tables before the test and drops them after.
     """
     Base.metadata.create_all(bind=test_engine)
-    
+
     db = TestSessionLocal()
     try:
         yield db
@@ -59,7 +61,7 @@ def db() -> Generator[Session, None, None]:
 def client(db: Session) -> Generator[TestClient, None, None]:
     """
     Create a test client with database override.
-    
+
     Uses the test database instead of the production database.
     """
     def override_get_db():
@@ -67,7 +69,7 @@ def client(db: Session) -> Generator[TestClient, None, None]:
             yield db
         finally:
             pass
-    
+
     app.dependency_overrides[get_db] = override_get_db
     with TestClient(app) as test_client:
         yield test_client
@@ -81,7 +83,6 @@ def test_user(db: Session) -> User:
         email="test@example.com",
         # Password: Test@Password123 (meets all requirements)
         password_hash=hash_password("Test@Password123"),
-        review_tracking_start_date=date(2026, 1, 1),
     )
     db.add(user)
     db.commit()
@@ -95,7 +96,6 @@ def other_user(db: Session) -> User:
     user = User(
         email="other@example.com",
         password_hash=hash_password("Other@Password123"),
-        review_tracking_start_date=date(2026, 1, 1),
     )
     db.add(user)
     db.commit()
@@ -117,47 +117,35 @@ def other_auth_headers(other_user: User) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
+def _make_subject(db: Session, user: User, name: str, start_date: date,
+                   category: Category = Category.MEDIUM, stage: int = 0) -> Subject:
+    subject = Subject(
+        user_id=user.id,
+        name=name,
+        start_date=start_date,
+        category=category,
+        stage=stage,
+        next_due_date=next_due_date(start_date, State(category, stage)),
+    )
+    db.add(subject)
+    db.commit()
+    db.refresh(subject)
+    return subject
+
+
 @pytest.fixture
 def sample_subject(db: Session, test_user: User) -> Subject:
-    """Create a sample subject for the test user."""
-    subject = Subject(
-        user_id=test_user.id,
-        name="Cardiology",
-        start_date=date(2026, 1, 25),
-        schedule_type=ScheduleType.DEFAULT,
-    )
-    db.add(subject)
-    db.commit()
-    db.refresh(subject)
-    return subject
+    """Create a sample subject (Medium, stage 0) for the test user."""
+    return _make_subject(db, test_user, "Cardiology", date(2026, 1, 25))
 
 
 @pytest.fixture
-def sample_custom_subject(db: Session, test_user: User) -> Subject:
-    """Create a sample subject with custom schedule for the test user."""
-    subject = Subject(
-        user_id=test_user.id,
-        name="Neurology",
-        start_date=date(2026, 1, 25),
-        schedule_type=ScheduleType.CUSTOM,
-        custom_intervals_days=[2, 5, 10, 20],
-    )
-    db.add(subject)
-    db.commit()
-    db.refresh(subject)
-    return subject
+def sample_hard_subject(db: Session, test_user: User) -> Subject:
+    """Create a sample Hard-category subject for the test user."""
+    return _make_subject(db, test_user, "Neurology", date(2026, 1, 25), Category.HARD, 0)
 
 
 @pytest.fixture
 def other_user_subject(db: Session, other_user: User) -> Subject:
     """Create a subject belonging to other user (for isolation tests)."""
-    subject = Subject(
-        user_id=other_user.id,
-        name="Pharmacology",
-        start_date=date(2026, 1, 25),
-        schedule_type=ScheduleType.DEFAULT,
-    )
-    db.add(subject)
-    db.commit()
-    db.refresh(subject)
-    return subject
+    return _make_subject(db, other_user, "Pharmacology", date(2026, 1, 25))

@@ -9,6 +9,7 @@ variables and never committed to version control.
 """
 
 import secrets
+from datetime import date
 from pydantic_settings import BaseSettings
 from pydantic import field_validator
 from functools import lru_cache
@@ -102,8 +103,18 @@ class Settings(BaseSettings):
     # Application Settings
     # ==========================================================================
     default_timezone: str = "Europe/Bucharest"
-    default_intervals: list[int] = [1, 3, 7, 14, 30, 60, 120, 180]
-    
+
+    # ==========================================================================
+    # Final Active Recall / Reference Mode
+    # ==========================================================================
+    # On/after this date, a chapter's next computed interval pushes it into
+    # Final Active Recall instead of scheduling another session.
+    final_recall_cutoff_date: date = date(2026, 10, 13)
+    # End of the Reference Mode / final rereading window.
+    reference_mode_end_date: date = date(2026, 11, 12)
+    # Used for the "days remaining" dashboard stat.
+    exam_date: date = date(2026, 11, 13)
+
     # ==========================================================================
     # Admin Account Configuration
     # SECURITY: Change these defaults in production!

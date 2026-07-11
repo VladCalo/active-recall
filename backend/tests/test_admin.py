@@ -13,7 +13,7 @@ import pytest
 from datetime import date
 
 from app.models.user import User
-from app.models.subject import Subject, ScheduleType
+from app.models.subject import Subject
 from app.core.security import create_access_token, hash_password
 
 

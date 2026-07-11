@@ -72,14 +72,13 @@ class AdminService:
             today = review_service.get_today()
             end_7d = today + timedelta(days=6)
             
-            # Today's reviews
-            today_subjects = review_service.get_subjects_due_today()
-            reviews_due_today += len(today_subjects)
-            
-            # Next 7 days reviews
-            range_subjects = review_service.get_subjects_due_in_range(today, end_7d)
-            for subjects in range_subjects.values():
-                reviews_due_7d += len(subjects)
+            # Today's reviews (includes overdue)
+            reviews_due_today += len(review_service.get_due_today())
+
+            # Next 7 days (upcoming next_due_date + completions already logged in range)
+            range_items = review_service.get_calendar_range(today, end_7d)
+            for items in range_items.values():
+                reviews_due_7d += len(items)
         
         return {
             "total_users": total_users,
@@ -159,7 +158,7 @@ class AdminService:
                 "id": str(subject.id),
                 "name": subject.name,
                 "start_date": subject.start_date.isoformat(),
-                "schedule_type": subject.schedule_type.value,
+                "category": subject.category.value,
             })
         
         return {
@@ -326,18 +325,11 @@ def seed_admin_user(db: Session) -> tuple[bool, str]:
                 )
     
     # Create admin user
-    from datetime import datetime
-    from zoneinfo import ZoneInfo
-
-    tz = ZoneInfo(settings.default_timezone)
-    today = datetime.now(tz).date()
-
     admin_user = User(
         email=settings.admin_email.lower(),
         password_hash=hash_password(settings.admin_password),
         is_admin=True,
         is_disabled=False,
-        review_tracking_start_date=today,
     )
     
     db.add(admin_user)

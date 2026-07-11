@@ -27,7 +27,13 @@ from alembic import command as alembic_command
 
 from app.config import get_settings
 from app.database import engine, Base, SessionLocal
-from app.api import subjects_router, reviews_router, health_router, auth_router
+from app.api import (
+    subjects_router,
+    reviews_router,
+    reference_mode_router,
+    health_router,
+    auth_router,
+)
 from app.api.admin import router as admin_router
 from app.core.rate_limiter import limiter, rate_limit_exceeded_handler
 from app.core.logging import setup_logging, get_logger
@@ -94,28 +100,9 @@ async def lifespan(app: FastAPI):
     # Run database migrations
     run_migrations()
     
-    # Initialize tracking start date for existing users; then seed admin
+    # Seed admin user
     db = SessionLocal()
     try:
-        if os.environ.get("TESTING") != "1":
-            from datetime import datetime
-            from app.models.user import User
-            from app.config import get_settings
-            from zoneinfo import ZoneInfo
-
-            try:
-                tz = ZoneInfo(get_settings().default_timezone)
-                today = datetime.now(tz).date()
-                db.query(User).filter(User.review_tracking_start_date.is_(None)).update(
-                    {"review_tracking_start_date": today}
-                )
-                db.commit()
-            except Exception as e:
-                # Column may not exist on old DB; don't crash startup
-                logger.warning("review_tracking_start_date_init_skipped", error=str(e))
-                db.rollback()
-
-        # Seed admin user
         created, message = seed_admin_user(db)
         if created:
             logger.info("admin_user_seeded", message=message)
@@ -291,6 +278,7 @@ app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(subjects_router)
 app.include_router(reviews_router)
+app.include_router(reference_mode_router)
 app.include_router(admin_router)
 
 

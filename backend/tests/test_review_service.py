@@ -1,187 +1,144 @@
 """
-Tests for the ReviewService.
-
-Tests cover:
-- Due date computation
-- Next due date calculation
-- Finding subjects due on specific dates
+Tests for ReviewService: completing reviews, today's due list ordering,
+Reference Mode summary/list, and forced cutover.
 """
 
+from datetime import date, datetime
+from unittest.mock import patch
+
 import pytest
-from datetime import date, timedelta
-from unittest.mock import patch, MagicMock
 
+from app.models.enums import Category, Rating
 from app.services.review_service import ReviewService
-from app.models.subject import Subject, ScheduleType
+from app.services.subject_service import SubjectService
 
 
-class TestComputeDueDates:
-    """Tests for compute_due_dates method."""
-
-    def test_default_schedule_computes_correct_dates(self, db, test_user, sample_subject):
-        """Default schedule should use [1, 3, 7, 14, 30, 60, 120, 180] intervals."""
+class TestCompleteReview:
+    def test_updates_category_stage_and_next_due_date(self, db, test_user, sample_subject):
         service = ReviewService(db, test_user)
-        due_dates = service.compute_due_dates(sample_subject)
-        
-        # start_date = 2026-01-25
-        expected = [
-            date(2026, 1, 26),   # +1
-            date(2026, 1, 28),   # +3
-            date(2026, 2, 1),    # +7
-            date(2026, 2, 8),    # +14
-            date(2026, 2, 24),   # +30
-            date(2026, 3, 26),   # +60
-            date(2026, 5, 25),   # +120
-            date(2026, 7, 24),   # +180
-        ]
-        
-        assert due_dates == expected
-
-    def test_custom_schedule_computes_correct_dates(self, db, test_user, sample_custom_subject):
-        """Custom schedule should use provided intervals [2, 5, 10, 20]."""
-        service = ReviewService(db, test_user)
-        due_dates = service.compute_due_dates(sample_custom_subject)
-        
-        # start_date = 2026-01-25, intervals = [2, 5, 10, 20]
-        expected = [
-            date(2026, 1, 27),   # +2
-            date(2026, 1, 30),   # +5
-            date(2026, 2, 4),    # +10
-            date(2026, 2, 14),   # +20
-        ]
-        
-        assert due_dates == expected
-
-    def test_due_dates_are_sorted(self, db, test_user):
-        """Due dates should always be sorted ascending."""
-        subject = Subject(
-            user_id=test_user.id,
-            name="Test",
-            start_date=date(2026, 1, 1),
-            schedule_type=ScheduleType.CUSTOM,
-            custom_intervals_days=[30, 1, 15, 7],  # Unsorted input
+        result = service.complete_review(
+            sample_subject.id, Rating.EXCELLENT, completed_at=date(2026, 1, 25)
         )
-        db.add(subject)
+        # Medium + Excellent -> Easy, stage 0 (+10 days)
+        assert result["category"] == Category.EASY
+        assert result["stage"] == 0
+        assert result["next_due_date"] == date(2026, 2, 4)
+        assert result["is_final_recall"] is False
+        assert result["banner_message"] is None
+
+    def test_creates_completion_log_entry(self, db, test_user, sample_subject):
+        service = ReviewService(db, test_user)
+        service.complete_review(sample_subject.id, Rating.GOOD_MINOR_HESITATION, completed_at=date(2026, 1, 25))
+        assert SubjectService(db, test_user).total_active_recall_count(sample_subject) == 1
+
+    def test_next_interval_counts_from_completion_date_not_scheduled_date(self, db, test_user, sample_subject):
+        """Even if completed late, the next interval counts from the real completion date."""
+        service = ReviewService(db, test_user)
+        # sample_subject was due 2026-01-30 (Medium, +5 from start 2026-01-25),
+        # completed 3 days late on 2026-02-02
+        result = service.complete_review(
+            sample_subject.id, Rating.GOOD_MINOR_HESITATION, completed_at=date(2026, 2, 2)
+        )
+        # Medium + Good -> Medium stage 1 (+8 days) from Feb 2, not from the original due date
+        assert result["next_due_date"] == date(2026, 2, 10)
+
+    def test_detects_final_active_recall(self, db, test_user, sample_subject):
+        service = ReviewService(db, test_user)
+        # Force close to the cutoff: Easy stage 3 (+21 days) from Oct 5 lands Oct 26, past Oct 13 cutoff.
+        # Push the subject to Easy stage 3 first via repeated excellent ratings, then complete near cutoff.
+        db_subject = SubjectService(db, test_user).get_by_id(sample_subject.id)
+        db_subject.category = Category.EASY
+        db_subject.stage = 3
         db.commit()
-        
+
+        result = service.complete_review(
+            sample_subject.id, Rating.EXCELLENT, completed_at=date(2026, 10, 5)
+        )
+        assert result["is_final_recall"] is True
+        assert result["next_due_date"] is None
+        assert "final Active Recall" in result["banner_message"]
+
+        updated = SubjectService(db, test_user).get_by_id(sample_subject.id)
+        assert updated.is_final_recall_reached is True
+        assert updated.final_active_recall_date == date(2026, 10, 5)
+        assert updated.final_category == Category.EASY
+
+    def test_cannot_complete_already_final_subject(self, db, test_user, sample_subject):
         service = ReviewService(db, test_user)
-        due_dates = service.compute_due_dates(subject)
-        
-        # Should be sorted
-        assert due_dates == sorted(due_dates)
-
-
-class TestIsDueOnDate:
-    """Tests for is_due_on_date method."""
-
-    def test_returns_true_when_due(self, db, test_user, sample_subject):
-        """Should return True when subject is due on the given date."""
-        service = ReviewService(db, test_user)
-        
-        # Day 1 after start (2026-01-26) should be due
-        assert service.is_due_on_date(sample_subject, date(2026, 1, 26)) is True
-
-    def test_returns_false_when_not_due(self, db, test_user, sample_subject):
-        """Should return False when subject is not due on the given date."""
-        service = ReviewService(db, test_user)
-        
-        # Day 2 after start (2026-01-27) should NOT be due for default schedule
-        assert service.is_due_on_date(sample_subject, date(2026, 1, 27)) is False
-
-    def test_start_date_is_not_due(self, db, test_user, sample_subject):
-        """Start date itself should not be a due date."""
-        service = ReviewService(db, test_user)
-        
-        # Start date (2026-01-25) is not a review date
-        assert service.is_due_on_date(sample_subject, date(2026, 1, 25)) is False
-
-
-class TestGetNextDueDate:
-    """Tests for get_next_due_date method."""
-
-    def test_returns_first_due_date_from_today(self, db, test_user, sample_subject):
-        """Should return the next upcoming due date."""
-        service = ReviewService(db, test_user)
-        
-        # Mock today as 2026-01-25 (start date)
-        with patch.object(service, 'get_today', return_value=date(2026, 1, 25)):
-            next_due = service.get_next_due_date(sample_subject)
-            assert next_due == date(2026, 1, 26)  # First interval is +1
-
-    def test_returns_none_when_all_completed(self, db, test_user, sample_subject):
-        """Should return None when all reviews are in the past."""
-        service = ReviewService(db, test_user)
-        
-        # Mock today as far in the future
-        with patch.object(service, 'get_today', return_value=date(2027, 1, 1)):
-            next_due = service.get_next_due_date(sample_subject)
-            assert next_due is None
-
-    def test_skips_past_due_dates(self, db, test_user, sample_subject):
-        """Should skip due dates that are in the past."""
-        service = ReviewService(db, test_user)
-        
-        # Mock today as 2026-01-30 (after first two intervals)
-        with patch.object(service, 'get_today', return_value=date(2026, 1, 30)):
-            next_due = service.get_next_due_date(sample_subject)
-            # Next due after Jan 30 is Feb 1 (+7 days from Jan 25)
-            assert next_due == date(2026, 2, 1)
-
-
-class TestGetSubjectsDueToday:
-    """Tests for get_subjects_due_today method."""
-
-    def test_returns_subjects_due_today(self, db, test_user, sample_subject):
-        """Should return subjects that are due on today's date."""
-        service = ReviewService(db, test_user)
-        
-        # Mock today as 2026-01-26 (first due date)
-        with patch.object(service, 'get_today', return_value=date(2026, 1, 26)):
-            due_subjects = service.get_subjects_due_today()
-            assert len(due_subjects) == 1
-            assert due_subjects[0].name == "Cardiology"
-
-    def test_returns_empty_when_nothing_due(self, db, test_user, sample_subject):
-        """Should return empty list when no subjects are due."""
-        service = ReviewService(db, test_user)
-        
-        # Mock today as 2026-01-27 (not a due date for default schedule)
-        with patch.object(service, 'get_today', return_value=date(2026, 1, 27)):
-            due_subjects = service.get_subjects_due_today()
-            assert len(due_subjects) == 0
-
-    def test_returns_multiple_subjects(self, db, test_user, sample_subject, sample_custom_subject):
-        """Should return all subjects due on the same day."""
-        # Modify custom subject to also be due on Jan 26
-        sample_custom_subject.custom_intervals_days = [1, 5, 10]
+        subject = SubjectService(db, test_user).get_by_id(sample_subject.id)
+        subject.is_final_recall_reached = True
         db.commit()
-        
+
+        with pytest.raises(ValueError, match="already reached its Final Active Recall"):
+            service.complete_review(sample_subject.id, Rating.EXCELLENT)
+
+    def test_raises_for_unknown_subject(self, db, test_user):
         service = ReviewService(db, test_user)
-        
-        with patch.object(service, 'get_today', return_value=date(2026, 1, 26)):
-            due_subjects = service.get_subjects_due_today()
-            assert len(due_subjects) == 2
+        with pytest.raises(ValueError, match="not found"):
+            service.complete_review("unknown-id", Rating.EXCELLENT)
 
 
-class TestGetToday:
-    """Tests for get_today method with timezone handling."""
-
-    def test_uses_default_timezone(self, db, test_user):
-        """Should use Europe/Bucharest by default."""
+class TestGetDueToday:
+    def test_overdue_priority_ordering(self, db, test_user, sample_subject, sample_hard_subject):
+        """Overdue Hard, Today's Hard, Overdue Medium, Today's Medium order."""
         service = ReviewService(db, test_user)
-        today = service.get_today()
-        
-        # Just verify it returns a date object
-        assert isinstance(today, date)
+        subject_service = SubjectService(db, test_user)
 
-    def test_uses_specified_timezone(self, db, test_user):
-        """Should use the specified timezone."""
+        medium = subject_service.get_by_id(sample_subject.id)
+        hard = subject_service.get_by_id(sample_hard_subject.id)
+
+        with patch.object(ReviewService, "get_today", return_value=date(2026, 2, 1)):
+            medium.next_due_date = date(2026, 1, 20)  # overdue medium
+            hard.next_due_date = date(2026, 2, 1)      # today's hard
+            db.commit()
+
+            due = service.get_due_today()
+            assert [d["category"] for d in due] == [Category.HARD, Category.MEDIUM]
+            assert due[0]["is_overdue"] is False
+            assert due[1]["is_overdue"] is True
+
+    def test_excludes_final_recall_reached_subjects(self, db, test_user, sample_subject):
         service = ReviewService(db, test_user)
-        
-        # Test with different timezone
-        today_utc = service.get_today("UTC")
-        today_bucharest = service.get_today("Europe/Bucharest")
-        
-        # Both should be valid dates (may or may not be the same depending on time)
-        assert isinstance(today_utc, date)
-        assert isinstance(today_bucharest, date)
+        subject = SubjectService(db, test_user).get_by_id(sample_subject.id)
+        subject.is_final_recall_reached = True
+        db.commit()
+
+        with patch.object(ReviewService, "get_today", return_value=date(2026, 2, 1)):
+            assert service.get_due_today() == []
+
+
+class TestReferenceModeForcedCutover:
+    def test_forces_cutover_when_cutoff_reached(self, db, test_user, sample_subject):
+        subject_service = SubjectService(db, test_user)
+        with patch.object(SubjectService, "_today", return_value=date(2026, 10, 20)):
+            fetched = subject_service.get_by_id(sample_subject.id)
+            assert fetched.is_final_recall_reached is True
+            assert fetched.final_category == Category.MEDIUM  # default, never reviewed
+            assert fetched.next_due_date is None
+
+    def test_no_cutover_before_cutoff(self, db, test_user, sample_subject):
+        subject_service = SubjectService(db, test_user)
+        with patch.object(SubjectService, "_today", return_value=date(2026, 6, 1)):
+            fetched = subject_service.get_by_id(sample_subject.id)
+            assert fetched.is_final_recall_reached is False
+
+
+class TestReferenceModeSummary:
+    def test_summary_counts(self, db, test_user, sample_subject, sample_hard_subject):
+        service = ReviewService(db, test_user)
+        subject_service = SubjectService(db, test_user)
+
+        subject = subject_service.get_by_id(sample_subject.id)
+        subject.is_final_recall_reached = True
+        subject.final_category = Category.MEDIUM
+        subject.reread_completed_at = datetime.utcnow()
+        db.commit()
+
+        with patch.object(ReviewService, "get_today", return_value=date(2026, 10, 20)):
+            summary = service.get_reference_mode_summary()
+
+        assert summary["chapters_completed"] == 1
+        assert summary["chapters_remaining"] == 1
+        assert summary["percentage_completed"] == 50.0
+        assert summary["is_reference_mode"] is True
+

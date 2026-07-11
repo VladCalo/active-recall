@@ -12,7 +12,6 @@ Security features:
 import asyncio
 import uuid
 from datetime import datetime, timezone, timedelta
-from zoneinfo import ZoneInfo
 from typing import Optional, Tuple
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -166,14 +165,11 @@ class AuthService:
 
         # Hash password
         password_hash = hash_password(data.password)
-        
+
         # Create user
-        tz = ZoneInfo(settings.default_timezone)
-        today = datetime.now(tz).date()
         user = User(
             email=data.email.lower().strip(),
             password_hash=password_hash,
-            review_tracking_start_date=today,
         )
         
         self.db.add(user)

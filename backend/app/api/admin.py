@@ -70,7 +70,7 @@ class SubjectSummary(BaseModel):
     id: str
     name: str
     start_date: str
-    schedule_type: str
+    category: str
 
 
 class UserDetailResponse(BaseModel):

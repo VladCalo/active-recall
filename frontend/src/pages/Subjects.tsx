@@ -22,8 +22,14 @@ import {
 } from '@/components/ui/alert-dialog'
 import { SubjectDialog } from '@/components/SubjectDialog'
 import { getSubjects, deleteSubject, type Subject } from '@/lib/api'
-import { formatDate, formatIntervals } from '@/lib/utils'
+import { formatDate } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
+
+const CATEGORY_STYLES: Record<string, string> = {
+  HARD: 'bg-red-100 text-red-700 border-red-200',
+  MEDIUM: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+  EASY: 'bg-green-100 text-green-700 border-green-200',
+}
 
 export function Subjects() {
   const [subjects, setSubjects] = useState<Subject[]>([])
@@ -185,8 +191,8 @@ export function Subjects() {
                     <tr className="border-b text-left">
                       <th className="pb-3 font-medium">Name</th>
                       <th className="pb-3 font-medium">Start Date</th>
-                      <th className="pb-3 font-medium">Schedule</th>
-                      <th className="pb-3 font-medium">Intervals</th>
+                      <th className="pb-3 font-medium">Category</th>
+                      <th className="pb-3 font-medium">Sessions</th>
                       <th className="pb-3 font-medium">Next Due</th>
                       <th className="pb-3 font-medium text-right">Actions</th>
                     </tr>
@@ -262,11 +268,8 @@ function SubjectCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className="font-medium truncate">{subject.name}</h3>
-            <Badge 
-              variant={subject.schedule_type === 'CUSTOM' ? 'secondary' : 'outline'}
-              className="text-xs"
-            >
-              {subject.schedule_type}
+            <Badge className={`text-xs border ${CATEGORY_STYLES[subject.category]}`}>
+              {subject.is_final_recall_reached ? 'FINAL' : subject.category}
             </Badge>
           </div>
           
@@ -277,7 +280,7 @@ function SubjectCard({
             </div>
             <div className="flex items-center gap-2">
               <Clock className="h-3.5 w-3.5 flex-shrink-0" />
-              <span className="truncate">Intervals: {formatIntervals(subject.intervals)}</span>
+              <span className="truncate">{subject.total_active_recall_count} session{subject.total_active_recall_count !== 1 ? 's' : ''}</span>
             </div>
             <div className="flex items-center gap-2">
               <ChevronRight className="h-3.5 w-3.5 flex-shrink-0" />
@@ -343,14 +346,14 @@ function SubjectRow({
         </div>
       </td>
       <td className="py-4">
-        <Badge variant={subject.schedule_type === 'CUSTOM' ? 'secondary' : 'outline'}>
-          {subject.schedule_type}
+        <Badge className={`border ${CATEGORY_STYLES[subject.category]}`}>
+          {subject.is_final_recall_reached ? 'FINAL' : subject.category}
         </Badge>
       </td>
       <td className="py-4">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Clock className="h-4 w-4" />
-          {formatIntervals(subject.intervals)}
+          {subject.total_active_recall_count}
         </div>
       </td>
       <td className="py-4">

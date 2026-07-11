@@ -1,65 +1,67 @@
 """
-Pydantic schemas for review-related operations.
-
-These schemas handle the today's reviews and upcoming reviews responses.
+Pydantic schemas for review-related operations: today's due chapters,
+completing a review, and calendar range data.
 """
 
 from datetime import date
 from typing import Optional
 from pydantic import BaseModel, Field
+from app.models.enums import Category, Rating
 
 
-class ReviewEvent(BaseModel):
-    """Event info for a specific due date."""
-    subject_id: str = Field(..., description="Subject UUID")
-    subject_name: str = Field(..., description="Subject name")
-    start_date: date = Field(..., description="Subject start date")
-    schedule_type: str = Field(..., description="DEFAULT or CUSTOM")
-    due_date: date = Field(..., description="Original scheduled due date")
-    effective_date: date = Field(..., description="Displayed date (after missed/reschedule)")
-    revision_number: int = Field(..., description="Which revision this is (1-based)")
-    total_revisions: int = Field(..., description="Total number of revisions in schedule")
-    is_completed: bool = Field(..., description="Whether this event is completed")
-    is_missed: bool = Field(..., description="Whether this event was missed and moved")
-    was_rescheduled: bool = Field(..., description="Whether this event was manually rescheduled")
-    rescheduled_to: Optional[date] = Field(None, description="Manual reschedule target date")
+class DueItem(BaseModel):
+    """A chapter due for Active Recall today (or overdue)."""
+    subject_id: str
+    subject_name: str
+    category: Category
+    stage: int
+    due_date: date
+    is_overdue: bool = Field(..., description="True if due_date is before today")
 
 
 class TodayReviewsResponse(BaseModel):
-    """Response schema for today's reviews endpoint."""
-    today: date = Field(..., description="Today's date in the requested timezone")
-    timezone: str = Field(..., description="Timezone used for date calculation")
-    events: list[ReviewEvent] = Field(
-        ...,
-        description="Review events effective today"
+    """Today's due chapters, sorted by overdue-priority (Hard, then Medium, then Easy)."""
+    today: date
+    timezone: str
+    items: list[DueItem]
+    count: int
+
+
+class CompleteReviewRequest(BaseModel):
+    subject_id: str = Field(..., description="Subject UUID")
+    rating: Rating = Field(..., description="How the session went")
+    completed_at: Optional[date] = Field(
+        None, description="Date the session was actually completed (defaults to today)"
     )
-    count: int = Field(..., description="Number of events due today")
 
 
-class UpcomingReviewsResponse(BaseModel):
-    """Response schema for upcoming reviews endpoint."""
-    start_date: date = Field(..., description="Start of the date range")
-    end_date: date = Field(..., description="End of the date range")
-    timezone: str = Field(..., description="Timezone used for date calculation")
-    reviews: dict[str, list[ReviewEvent]] = Field(
-        ...,
-        description="Map of date strings to events due on that date"
+class CompleteReviewResponse(BaseModel):
+    subject_id: str
+    category: Category
+    stage: int
+    next_due_date: Optional[date]
+    is_final_recall: bool = Field(
+        ..., description="True if this session was the chapter's Final Active Recall"
     )
-    total_count: int = Field(..., description="Total number of reviews in the period")
+    banner_message: Optional[str] = Field(
+        None, description="Shown when is_final_recall is True"
+    )
 
 
-class CalendarSubject(ReviewEvent):
-    """Event info for calendar display (alias)."""
-    pass
+class CalendarItem(BaseModel):
+    """A single calendar entry - either a completed session or the one upcoming date."""
+    subject_id: str
+    subject_name: str
+    type: str = Field(..., description="'upcoming' or 'completed'")
+    category: Category
+    rating: Optional[Rating] = None
 
 
 class RangeReviewsResponse(BaseModel):
-    """Response schema for calendar range endpoint."""
-    timezone: str = Field(..., description="Timezone used for date calculation")
-    start: date = Field(..., description="Start of the requested range")
-    end: date = Field(..., description="End of the requested range")
-    items: dict[str, list[CalendarSubject]] = Field(
-        ...,
-        description="Map of date strings (YYYY-MM-DD) to events on that date"
+    timezone: str
+    start: date
+    end: date
+    items: dict[str, list[CalendarItem]] = Field(
+        ..., description="Map of date strings (YYYY-MM-DD) to calendar entries on that date"
     )
-    total_count: int = Field(..., description="Total number of due items in the range")
+    total_count: int

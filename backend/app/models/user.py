@@ -10,7 +10,7 @@ Security considerations:
 """
 
 import uuid
-from datetime import datetime, date
+from datetime import datetime
 from typing import Optional, TYPE_CHECKING
 from sqlalchemy import String, Date, DateTime, Integer, Boolean, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -97,14 +97,10 @@ class User(Base):
         onupdate=func.now()
     )
     last_login_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime, 
+        DateTime,
         nullable=True
     )
-    review_tracking_start_date: Mapped[Optional[date]] = mapped_column(
-        Date,
-        nullable=True
-    )
-    
+
     # Relationships
     subjects: Mapped[list["Subject"]] = relationship(
         "Subject",

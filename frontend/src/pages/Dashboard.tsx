@@ -1,8 +1,9 @@
 /**
  * Dashboard Page
- * 
- * The main dashboard showing today's reviews.
- * Responsive design with cards that stack on mobile.
+ *
+ * Phase 1 (Adaptive Active Recall): today's due chapters, sorted by
+ * overdue-priority (Hard, then Medium, then Easy). Automatically defers to
+ * the Reference Mode view once the exam-cycle cutoff is reached.
  */
 
 import { useEffect, useState } from 'react'
@@ -11,14 +12,63 @@ import { Calendar, BookOpen, Clock, Sparkles, RefreshCw, AlertTriangle } from 'l
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { getTodayReviews, completeReviewEvent, rescheduleReviewEvent, type ReviewEvent, type TodayReviewsResponse } from '@/lib/api'
+import {
+  getTodayReviews,
+  completeReview,
+  getReferenceModeSummary,
+  type DueItem,
+  type TodayReviewsResponse,
+  type Rating,
+  type Category,
+} from '@/lib/api'
 import { formatDate } from '@/lib/utils'
+import { ReferenceMode } from '@/pages/ReferenceMode'
+
+const CATEGORY_STYLES: Record<Category, string> = {
+  HARD: 'bg-red-100 text-red-700 border-red-200',
+  MEDIUM: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+  EASY: 'bg-green-100 text-green-700 border-green-200',
+}
+
+const RATINGS: { value: Rating; label: string }[] = [
+  { value: 'MAJOR_GAPS', label: 'Major gaps' },
+  { value: 'MANY_CONFUSIONS', label: 'Many confusions' },
+  { value: 'GOOD_MINOR_HESITATION', label: 'Good, minor hesitation' },
+  { value: 'EXCELLENT', label: 'Excellent' },
+]
 
 export function Dashboard() {
+  const [checkingMode, setCheckingMode] = useState(true)
+  const [isReferenceMode, setIsReferenceMode] = useState(false)
+
+  useEffect(() => {
+    getReferenceModeSummary()
+      .then((s) => setIsReferenceMode(s.is_reference_mode))
+      .catch(() => setIsReferenceMode(false))
+      .finally(() => setCheckingMode(false))
+  }, [])
+
+  if (checkingMode) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (isReferenceMode) {
+    return <ReferenceMode />
+  }
+
+  return <ActiveRecallDashboard />
+}
+
+function ActiveRecallDashboard() {
   const [data, setData] = useState<TodayReviewsResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isRateLimited, setIsRateLimited] = useState(false)
+  const [banner, setBanner] = useState<string | null>(null)
 
   const fetchReviews = async () => {
     setLoading(true)
@@ -44,27 +94,28 @@ export function Dashboard() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* Page Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-sm sm:text-base text-muted-foreground mt-1">
-            Your daily review schedule at a glance
+            Your daily review schedule, sorted by priority
           </p>
         </div>
-        <Button 
-          variant="outline" 
-          size="default"
-          onClick={fetchReviews}
-          disabled={loading}
-          className="w-full sm:w-auto"
-        >
+        <Button variant="outline" size="default" onClick={fetchReviews} disabled={loading} className="w-full sm:w-auto">
           <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
           Refresh
         </Button>
       </div>
 
-      {/* Today's Date Card */}
+      {banner && (
+        <Card className="bg-amber-50 border-amber-300">
+          <CardContent className="flex items-start gap-3 py-3 sm:py-4">
+            <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-amber-800">{banner}</p>
+          </CardContent>
+        </Card>
+      )}
+
       {data && (
         <Card className="bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
           <CardContent className="flex items-center gap-3 sm:gap-4 py-3 sm:py-4">
@@ -80,7 +131,6 @@ export function Dashboard() {
         </Card>
       )}
 
-      {/* Today's Reviews Section */}
       <Card>
         <CardHeader className="pb-3 sm:pb-6">
           <div className="flex items-center gap-2">
@@ -88,7 +138,7 @@ export function Dashboard() {
             <CardTitle className="text-lg sm:text-xl">Today&apos;s Reviews</CardTitle>
           </div>
           <CardDescription className="text-sm">
-          {data ? `${data.count} event${data.count !== 1 ? 's' : ''} to review today` : 'Loading...'}
+            {data ? `${data.count} chapter${data.count !== 1 ? 's' : ''} due (overdue Hard first)` : 'Loading...'}
           </CardDescription>
         </CardHeader>
         <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0">
@@ -102,9 +152,7 @@ export function Dashboard() {
                 <>
                   <AlertTriangle className="h-8 w-8 text-yellow-500 mx-auto mb-4" />
                   <p className="text-muted-foreground mb-2">Too many requests</p>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Please wait a moment before refreshing.
-                  </p>
+                  <p className="text-sm text-muted-foreground mb-4">Please wait a moment before refreshing.</p>
                 </>
               ) : (
                 <p className="text-destructive mb-4">{error}</p>
@@ -113,10 +161,15 @@ export function Dashboard() {
                 Try Again
               </Button>
             </div>
-          ) : data && data.events.length > 0 ? (
+          ) : data && data.items.length > 0 ? (
             <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {data.events.map((event) => (
-                <SubjectReviewCard key={`${event.subject_id}-${event.due_date}`} event={event} onRefresh={fetchReviews} />
+              {data.items.map((item) => (
+                <SubjectReviewCard
+                  key={item.subject_id}
+                  item={item}
+                  onRefresh={fetchReviews}
+                  onFinalRecall={(msg) => setBanner(msg)}
+                />
               ))}
             </div>
           ) : (
@@ -125,7 +178,6 @@ export function Dashboard() {
         </CardContent>
       </Card>
 
-      {/* Quick Stats */}
       {data && data.count > 0 && (
         <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           <Card>
@@ -145,47 +197,24 @@ export function Dashboard() {
   )
 }
 
-/**
- * Helper function to format subject name with revision number.
- */
-function formatSubjectWithRevision(event: ReviewEvent): string {
-  if (event.is_completed) {
-    return `${event.subject_name} ✓`
-  }
-  return `${event.subject_name} ${event.revision_number}`
-}
-
-/**
- * Card component for a single subject due for review.
- */
 function SubjectReviewCard({
-  event,
+  item,
   onRefresh,
+  onFinalRecall,
 }: {
-  event: ReviewEvent
+  item: DueItem
   onRefresh: () => void
+  onFinalRecall: (message: string) => void
 }) {
   const [isUpdating, setIsUpdating] = useState(false)
-  const [showReschedule, setShowReschedule] = useState(false)
-  const [newDate, setNewDate] = useState<string>('')
 
-  const handleToggleComplete = async () => {
+  const handleRate = async (rating: Rating) => {
     setIsUpdating(true)
     try {
-      await completeReviewEvent(event.subject_id, event.due_date, !event.is_completed)
-      onRefresh()
-    } finally {
-      setIsUpdating(false)
-    }
-  }
-
-  const handleReschedule = async () => {
-    if (!newDate) return
-    setIsUpdating(true)
-    try {
-      await rescheduleReviewEvent(event.subject_id, event.due_date, newDate)
-      setShowReschedule(false)
-      setNewDate('')
+      const result = await completeReview(item.subject_id, rating)
+      if (result.is_final_recall && result.banner_message) {
+        onFinalRecall(`${item.subject_name}: ${result.banner_message}`)
+      }
       onRefresh()
     } finally {
       setIsUpdating(false)
@@ -196,93 +225,42 @@ function SubjectReviewCard({
     <Card className="hover:shadow-md transition-shadow">
       <CardHeader className="pb-2 px-3 sm:px-6 pt-3 sm:pt-6">
         <div className="flex items-start justify-between gap-2">
-          <CardTitle className="text-base sm:text-lg leading-tight">
-            <span className={event.is_completed ? 'line-through text-muted-foreground' : ''}>
-              {formatSubjectWithRevision(event)}
-            </span>
-          </CardTitle>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={handleToggleComplete}
-              disabled={isUpdating}
-              className="h-7 w-7"
-              aria-label={event.is_completed ? 'Mark incomplete' : 'Mark complete'}
-            >
-              {event.is_completed ? '✓' : ''}
-            </Button>
-            <Badge 
-              variant={event.schedule_type === 'CUSTOM' ? 'secondary' : 'outline'}
-              className="text-xs flex-shrink-0"
-            >
-              {event.schedule_type}
-            </Badge>
-          </div>
+          <CardTitle className="text-base sm:text-lg leading-tight">{item.subject_name}</CardTitle>
+          <Badge className={`text-xs flex-shrink-0 border ${CATEGORY_STYLES[item.category]}`}>
+            {item.category}
+          </Badge>
         </div>
         <div className="flex items-center gap-2">
-          <p className="text-xs text-muted-foreground">
-            Review {event.revision_number} of {event.total_revisions}
-          </p>
-          {event.is_missed && (
+          {item.is_overdue ? (
             <Badge variant="destructive" className="text-xs">
-              Missed → moved to today
+              Overdue since {formatDate(item.due_date)}
             </Badge>
+          ) : (
+            <p className="text-xs text-muted-foreground">Due today</p>
           )}
         </div>
-        {event.is_missed && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-2 w-fit"
-            onClick={() => setShowReschedule(true)}
-          >
-            Reschedule
-          </Button>
-        )}
-        {!event.is_missed && !event.is_completed && (
-          <p className="text-xs text-muted-foreground">
-            Due date: {formatDate(event.due_date)}
-          </p>
-        )}
       </CardHeader>
-      <CardContent className="space-y-1.5 sm:space-y-2 px-3 sm:px-6 pb-3 sm:pb-6">
-        <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground">
-          <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
-          <span className="truncate">Started: {formatDate(event.start_date)}</span>
-        </div>
-        <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground">
-          <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
-          <span className="truncate">
-            Original due: {formatDate(event.due_date)}
-          </span>
+      <CardContent className="space-y-2 px-3 sm:px-6 pb-3 sm:pb-6">
+        <p className="text-xs text-muted-foreground mb-1">How did this session go?</p>
+        <div className="grid grid-cols-2 gap-1.5">
+          {RATINGS.map((r) => (
+            <Button
+              key={r.value}
+              variant="outline"
+              size="sm"
+              className="text-xs h-auto py-1.5 whitespace-normal"
+              disabled={isUpdating}
+              onClick={() => handleRate(r.value)}
+            >
+              {r.label}
+            </Button>
+          ))}
         </div>
       </CardContent>
-      {showReschedule && (
-        <div className="px-3 sm:px-6 pb-3 sm:pb-6">
-          <div className="flex items-center gap-2">
-            <input
-              type="date"
-              value={newDate}
-              onChange={(e) => setNewDate(e.target.value)}
-              className="border rounded px-2 py-1 text-sm"
-            />
-            <Button size="sm" onClick={handleReschedule} disabled={!newDate || isUpdating}>
-              Save
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setShowReschedule(false)}>
-              Cancel
-            </Button>
-          </div>
-        </div>
-      )}
     </Card>
   )
 }
 
-/**
- * Empty state component shown when no reviews are due.
- */
 function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center py-10 sm:py-12 text-center px-4">
@@ -291,12 +269,12 @@ function EmptyState() {
       </div>
       <h3 className="text-base sm:text-lg font-semibold mb-2">All caught up!</h3>
       <p className="text-sm text-muted-foreground mb-4 sm:mb-6 max-w-md">
-        You have no subjects to review today. Great job staying on top of your studies!
+        You have no chapters to review today. Great job staying on top of your studies!
       </p>
       <Link to="/subjects">
         <Button size="default">
           <BookOpen className="h-4 w-4 mr-2" />
-          View All Subjects
+          View All Chapters
         </Button>
       </Link>
     </div>

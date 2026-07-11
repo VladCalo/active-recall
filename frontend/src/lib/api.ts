@@ -20,75 +20,102 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || `${import.meta.env.BASE_URL
 // Types
 // =============================================================================
 
-export type ScheduleType = 'DEFAULT' | 'CUSTOM'
+export type Category = 'HARD' | 'MEDIUM' | 'EASY'
+export type Rating = 'MAJOR_GAPS' | 'MANY_CONFUSIONS' | 'GOOD_MINOR_HESITATION' | 'EXCELLENT'
 
 export interface Subject {
   id: string
   name: string
   start_date: string
-  schedule_type: ScheduleType
-  custom_intervals_days: number[] | null
+  category: Category
+  stage: number
+  next_due_date: string | null
+  last_active_recall_date: string | null
+  total_active_recall_count: number
+  is_final_recall_reached: boolean
+  final_active_recall_date: string | null
+  final_category: Category | null
+  reread_completed_at: string | null
   created_at: string
   updated_at: string
-  next_due_date: string | null
-  intervals: number[]
-  revision_number: number | null
-  total_revisions: number
-  is_completed: boolean
 }
 
 export interface SubjectCreate {
   name: string
   start_date: string
-  schedule_type: ScheduleType
-  custom_intervals_days?: number[]
 }
 
 export interface SubjectUpdate {
   name?: string
   start_date?: string
-  schedule_type?: ScheduleType
-  custom_intervals_days?: number[]
 }
 
-export interface ReviewEvent {
+export interface DueItem {
   subject_id: string
   subject_name: string
-  start_date: string
-  schedule_type: ScheduleType
+  category: Category
+  stage: number
   due_date: string
-  effective_date: string
-  revision_number: number
-  total_revisions: number
-  is_completed: boolean
-  is_missed: boolean
-  was_rescheduled: boolean
-  rescheduled_to: string | null
+  is_overdue: boolean
 }
 
 export interface TodayReviewsResponse {
   today: string
   timezone: string
-  events: ReviewEvent[]
+  items: DueItem[]
   count: number
 }
 
-export interface UpcomingReviewsResponse {
-  start_date: string
-  end_date: string
-  timezone: string
-  reviews: Record<string, ReviewEvent[]>
-  total_count: number
+export interface CompleteReviewResponse {
+  subject_id: string
+  category: Category
+  stage: number
+  next_due_date: string | null
+  is_final_recall: boolean
+  banner_message: string | null
 }
 
-export type CalendarSubject = ReviewEvent
+export interface CalendarItem {
+  subject_id: string
+  subject_name: string
+  type: 'upcoming' | 'completed'
+  category: Category
+  rating: Rating | null
+}
 
 export interface RangeReviewsResponse {
   timezone: string
   start: string
   end: string
-  items: Record<string, CalendarSubject[]>
+  items: Record<string, CalendarItem[]>
   total_count: number
+}
+
+export interface ReferenceModeChapter {
+  subject_id: string
+  subject_name: string
+  last_active_recall_date: string | null
+  final_category: Category
+  total_active_recall_count: number
+  recommended_intensity_label: string
+  recommended_focus: string[]
+  reread_completed: boolean
+  reread_completed_at: string | null
+}
+
+export interface ReferenceModeListResponse {
+  is_reference_mode: boolean
+  cutoff_date: string
+  chapters: ReferenceModeChapter[]
+}
+
+export interface ReferenceModeSummary {
+  is_reference_mode: boolean
+  chapters_completed: number
+  chapters_remaining: number
+  percentage_completed: number
+  days_remaining_until_exam: number
+  exam_date: string
 }
 
 export interface User {
@@ -133,7 +160,7 @@ export interface AdminSubjectSummary {
   id: string
   name: string
   start_date: string
-  schedule_type: string
+  category: string
 }
 
 export interface AdminUserDetail {
@@ -426,16 +453,6 @@ export async function getTodayReviews(timezone = 'Europe/Bucharest'): Promise<To
   return response.data
 }
 
-export async function getUpcomingReviews(
-  days = 7,
-  timezone = 'Europe/Bucharest'
-): Promise<UpcomingReviewsResponse> {
-  const response = await api.get<UpcomingReviewsResponse>('/reviews/upcoming', {
-    params: { days, tz: timezone },
-  })
-  return response.data
-}
-
 export async function getReviewsInRange(
   start: string,
   end: string,
@@ -447,33 +464,41 @@ export async function getReviewsInRange(
   return response.data
 }
 
-export async function completeReviewEvent(
+export async function completeReview(
   subjectId: string,
-  dueDate: string,
-  isCompleted: boolean
-): Promise<void> {
+  rating: Rating,
+  completedAt?: string
+): Promise<CompleteReviewResponse> {
   try {
-    await api.post('/reviews/events/complete', {
+    const response = await api.post<CompleteReviewResponse>('/reviews/complete', {
       subject_id: subjectId,
-      due_date: dueDate,
-      is_completed: isCompleted,
+      rating,
+      completed_at: completedAt,
     })
+    return response.data
   } catch (error) {
     throw new Error(getErrorMessage(error))
   }
 }
 
-export async function rescheduleReviewEvent(
-  subjectId: string,
-  dueDate: string,
-  newDate: string
-): Promise<void> {
+// =============================================================================
+// Reference Mode API Functions
+// =============================================================================
+
+export async function getReferenceMode(): Promise<ReferenceModeListResponse> {
+  const response = await api.get<ReferenceModeListResponse>('/reference-mode')
+  return response.data
+}
+
+export async function getReferenceModeSummary(): Promise<ReferenceModeSummary> {
+  const response = await api.get<ReferenceModeSummary>('/reference-mode/summary')
+  return response.data
+}
+
+export async function completeReread(subjectId: string): Promise<ReferenceModeChapter> {
   try {
-    await api.post('/reviews/events/reschedule', {
-      subject_id: subjectId,
-      due_date: dueDate,
-      new_date: newDate,
-    })
+    const response = await api.post<ReferenceModeChapter>(`/reference-mode/${subjectId}/complete-reread`)
+    return response.data
   } catch (error) {
     throw new Error(getErrorMessage(error))
   }

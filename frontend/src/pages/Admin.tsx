@@ -671,7 +671,7 @@ function UserManagement() {
                         className="text-sm p-2 bg-slate-50 rounded flex justify-between"
                       >
                         <span>{subject.name}</span>
-                        <Badge variant="outline" className="text-xs">{subject.schedule_type}</Badge>
+                        <Badge variant="outline" className="text-xs">{subject.category}</Badge>
                       </div>
                     ))}
                   </div>

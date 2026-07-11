@@ -8,6 +8,7 @@ from app.api.subjects import router as subjects_router
 from app.api.reviews import router as reviews_router
 from app.api.reference_mode import router as reference_mode_router
 from app.api.settings import router as settings_router
+from app.api.metrics import router as metrics_router
 from app.api.health import router as health_router
 from app.api.auth import router as auth_router
 
@@ -16,6 +17,7 @@ __all__ = [
     "reviews_router",
     "reference_mode_router",
     "settings_router",
+    "metrics_router",
     "health_router",
     "auth_router",
 ]

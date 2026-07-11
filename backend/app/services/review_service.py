@@ -22,6 +22,7 @@ from app.services.adaptive_engine import (
     REREAD_INTENSITY,
     final_recall_cutoff_date as compute_cutoff_date,
 )
+from app.services.user_rules import get_rules
 from app.config import get_settings
 from app.core.timeutil import today_in_tz
 
@@ -115,9 +116,10 @@ class ReviewService:
 
         completed_at = completed_at or self.get_today(timezone)
 
+        rules = get_rules(self.user)
         current_state = State(subject.category, subject.stage)
         new_state = apply_rating(current_state, rating)
-        final = is_final_active_recall(completed_at, new_state, self._cutoff_date())
+        final = is_final_active_recall(completed_at, new_state, self._cutoff_date(), rules)
 
         completion = ReviewCompletion(
             user_id=self.user.id,
@@ -145,7 +147,7 @@ class ReviewService:
                 "This is the final Active Recall for this chapter before Final Rereading begins."
             )
         else:
-            subject.next_due_date = engine_next_due_date(completed_at, new_state)
+            subject.next_due_date = engine_next_due_date(completed_at, new_state, rules)
 
         self.db.commit()
         self.db.refresh(subject)
@@ -259,4 +261,53 @@ class ReviewService:
             "percentage_completed": round(percentage, 1),
             "days_remaining_until_exam": days_remaining,
             "exam_date": exam_date,
+        }
+
+    # ------------------------------------------------------------------
+    # Metrics
+    # ------------------------------------------------------------------
+
+    def get_metrics(self, timezone: str = None) -> dict:
+        """
+        Aggregate stats for the Metrics page: category distribution (using
+        final_category for chapters that reached Final Active Recall, since
+        their category is frozen at that point), overdue count, average
+        sessions per chapter, and reread-completion progress.
+        """
+        subjects = self.subject_service.get_all()
+        today = self.get_today(timezone)
+
+        distribution = {Category.HARD: 0, Category.MEDIUM: 0, Category.EASY: 0}
+        overdue_count = 0
+        final_recall_reached_count = 0
+        reread_completed_count = 0
+
+        for s in subjects:
+            effective_category = s.final_category if s.is_final_recall_reached else s.category
+            distribution[effective_category] += 1
+
+            if not s.is_final_recall_reached and s.next_due_date is not None and s.next_due_date < today:
+                overdue_count += 1
+
+            if s.is_final_recall_reached:
+                final_recall_reached_count += 1
+                if s.reread_completed_at is not None:
+                    reread_completed_count += 1
+
+        total = len(subjects)
+        total_sessions = sum(self.subject_service.total_active_recall_count(s) for s in subjects)
+        avg_sessions = round(total_sessions / total, 1) if total > 0 else 0.0
+
+        return {
+            "total_chapters": total,
+            "category_distribution": {
+                "HARD": distribution[Category.HARD],
+                "MEDIUM": distribution[Category.MEDIUM],
+                "EASY": distribution[Category.EASY],
+            },
+            "overdue_count": overdue_count,
+            "average_sessions_per_chapter": avg_sessions,
+            "total_sessions": total_sessions,
+            "final_recall_reached_count": final_recall_reached_count,
+            "reread_completed_count": reread_completed_count,
         }

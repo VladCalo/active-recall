@@ -7,7 +7,7 @@
  */
 
 import { Link, useLocation } from 'react-router-dom'
-import { Brain, LayoutDashboard, BookOpen, CalendarDays, Shield, LogOut, User, Menu, Settings as SettingsIcon } from 'lucide-react'
+import { Brain, LayoutDashboard, BookOpen, CalendarDays, Shield, LogOut, User, Menu, Settings as SettingsIcon, PieChart } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/contexts/AuthContext'
@@ -32,6 +32,7 @@ export function Layout({ children }: LayoutProps) {
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/subjects', label: 'Subjects', icon: BookOpen },
     { path: '/calendar', label: 'Calendar', icon: CalendarDays },
+    { path: '/metrics', label: 'Metrics', icon: PieChart },
     { path: '/settings', label: 'Settings', icon: SettingsIcon },
   ]
   

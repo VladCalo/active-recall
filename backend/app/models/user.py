@@ -12,7 +12,7 @@ Security considerations:
 import uuid
 from datetime import datetime, date
 from typing import Optional, TYPE_CHECKING
-from sqlalchemy import String, Date, DateTime, Integer, Boolean, func
+from sqlalchemy import String, Date, DateTime, Integer, Boolean, JSON, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
@@ -105,6 +105,13 @@ class User(Base):
     # Final Active Recall cutoff and Reference Mode end are both derived
     # from this (see app.services.adaptive_engine).
     exam_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+
+    # Customizable adaptive-engine rules. When custom_ladders is null, the
+    # built-in defaults (app.services.adaptive_engine.LADDERS) are used - a
+    # user only ever overrides all three categories at once, never partially.
+    custom_ladders: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    no_revision_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    no_revision_weekday: Mapped[int] = mapped_column(Integer, nullable=False, default=6)
 
     # Relationships
     subjects: Mapped[list["Subject"]] = relationship(

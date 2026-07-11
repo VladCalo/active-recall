@@ -21,6 +21,7 @@ from app.services.adaptive_engine import (
     next_due_date,
     final_recall_cutoff_date as compute_cutoff_date,
 )
+from app.services.user_rules import get_rules
 
 
 class SubjectService:
@@ -111,7 +112,9 @@ class SubjectService:
             start_date=data.start_date,
             category=DEFAULT_CATEGORY,
             stage=DEFAULT_STAGE,
-            next_due_date=next_due_date(data.start_date, State(DEFAULT_CATEGORY, DEFAULT_STAGE)),
+            next_due_date=next_due_date(
+                data.start_date, State(DEFAULT_CATEGORY, DEFAULT_STAGE), get_rules(self.user)
+            ),
         )
 
         self.db.add(subject)

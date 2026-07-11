@@ -118,10 +118,38 @@ export interface ReferenceModeSummary {
   exam_date: string
 }
 
+export interface Ladders {
+  HARD: number[]
+  MEDIUM: number[]
+  EASY: number[]
+}
+
 export interface ExamSettings {
   exam_date: string
   final_recall_cutoff_date: string
   reference_mode_end_date: string
+  ladders: Ladders
+  is_ladders_customized: boolean
+  no_revision_enabled: boolean
+  no_revision_weekday: number
+}
+
+export interface ExamSettingsUpdate {
+  exam_date?: string
+  ladders?: Ladders
+  reset_ladders_to_default?: boolean
+  no_revision_enabled?: boolean
+  no_revision_weekday?: number
+}
+
+export interface Metrics {
+  total_chapters: number
+  category_distribution: { HARD: number; MEDIUM: number; EASY: number }
+  overdue_count: number
+  average_sessions_per_chapter: number
+  total_sessions: number
+  final_recall_reached_count: number
+  reread_completed_count: number
 }
 
 export interface User {
@@ -519,13 +547,22 @@ export async function getExamSettings(): Promise<ExamSettings> {
   return response.data
 }
 
-export async function updateExamSettings(examDate: string): Promise<ExamSettings> {
+export async function updateExamSettings(data: ExamSettingsUpdate): Promise<ExamSettings> {
   try {
-    const response = await api.put<ExamSettings>('/settings', { exam_date: examDate })
+    const response = await api.put<ExamSettings>('/settings', data)
     return response.data
   } catch (error) {
     throw new Error(getErrorMessage(error))
   }
+}
+
+// =============================================================================
+// Metrics API Functions
+// =============================================================================
+
+export async function getMetrics(): Promise<Metrics> {
+  const response = await api.get<Metrics>('/metrics')
+  return response.data
 }
 
 // =============================================================================

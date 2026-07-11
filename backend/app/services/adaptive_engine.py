@@ -11,13 +11,15 @@ unit-tested without a database.
 """
 
 from datetime import date, timedelta
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 
 from app.models.enums import Category, Rating
 
 
 # Interval ladder per category: index = stage (0-based). Once the last stage
-# is reached, the interval stays capped there indefinitely.
+# is reached, the interval stays capped there indefinitely. This is the
+# built-in default - a user may override it entirely (see RulesConfig below),
+# but never partially: an override always supplies all three categories.
 LADDERS: dict[Category, list[int]] = {
     Category.HARD: [2, 4, 6, 8],
     Category.MEDIUM: [5, 8, 11, 14],
@@ -30,15 +32,60 @@ MAX_STAGE = 3  # every ladder has 4 stages, indices 0-3
 DEFAULT_CATEGORY = Category.MEDIUM
 DEFAULT_STAGE = 0
 
+# Default "no revisions on this day" rule (Sunday, Python's date.weekday()
+# where Monday=0 ... Sunday=6).
+DEFAULT_NO_REVISION_ENABLED = True
+DEFAULT_NO_REVISION_WEEKDAY = 6
+
 
 class State(NamedTuple):
     category: Category
     stage: int
 
 
-def get_interval(category: Category, stage: int) -> int:
+class RulesConfig(NamedTuple):
+    """
+    A user's customizable scheduling rules. Defaults reproduce the built-in
+    behavior exactly - only ladders and the no-revision-day rule are
+    user-editable; the rating transition table itself is fixed.
+    """
+    ladders: dict[Category, list[int]] = LADDERS
+    no_revision_enabled: bool = DEFAULT_NO_REVISION_ENABLED
+    no_revision_weekday: int = DEFAULT_NO_REVISION_WEEKDAY
+
+
+DEFAULT_RULES = RulesConfig()
+
+
+def validate_ladders(ladders: dict[str, list[int]]) -> None:
+    """
+    Raise ValueError if a custom ladder set isn't exactly 3 categories x 4
+    strictly-ascending positive-integer stages.
+    """
+    expected_categories = {c.value for c in Category}
+    if set(ladders.keys()) != expected_categories:
+        raise ValueError(f"Ladders must supply exactly these categories: {sorted(expected_categories)}")
+
+    for category_name, days in ladders.items():
+        if len(days) != 4:
+            raise ValueError(f"{category_name}: must have exactly 4 stages, got {len(days)}")
+        if not all(isinstance(d, int) and d > 0 for d in days):
+            raise ValueError(f"{category_name}: all stage intervals must be positive integers")
+        if list(days) != sorted(days) or len(set(days)) != len(days):
+            raise ValueError(f"{category_name}: stage intervals must be strictly ascending")
+
+
+def ladders_from_dict(data: dict[str, list[int]]) -> dict[Category, list[int]]:
+    return {Category(k): v for k, v in data.items()}
+
+
+def ladders_to_dict(ladders: dict[Category, list[int]]) -> dict[str, list[int]]:
+    return {k.value: v for k, v in ladders.items()}
+
+
+def get_interval(category: Category, stage: int, rules: RulesConfig = DEFAULT_RULES) -> int:
     """Days until next review for a given (category, stage)."""
-    ladder = LADDERS[category]
+    ladder = rules.ladders[category]
     return ladder[min(stage, MAX_STAGE)]
 
 
@@ -93,29 +140,36 @@ def apply_rating(current: State, rating: Rating) -> State:
     return _FIXED_TRANSITIONS[key]
 
 
-def shift_off_sunday(d: date) -> date:
-    """No revisions on Sunday - push it to Monday."""
-    if d.weekday() == 6:  # Monday=0 ... Sunday=6
+def shift_off_no_revision_day(d: date, rules: RulesConfig = DEFAULT_RULES) -> date:
+    """Push a date one day later if it lands on the configured no-revision weekday."""
+    if rules.no_revision_enabled and d.weekday() == rules.no_revision_weekday:
         return d + timedelta(days=1)
     return d
 
 
-def next_due_date(completion_date: date, new_state: State) -> date:
+def shift_off_sunday(d: date) -> date:
+    """No revisions on Sunday - push it to Monday. (Built-in default rule.)"""
+    return shift_off_no_revision_day(d, DEFAULT_RULES)
+
+
+def next_due_date(completion_date: date, new_state: State, rules: RulesConfig = DEFAULT_RULES) -> date:
     """
     The next review date, always counted from the actual completion date,
-    shifted off Sunday if it would land on one.
+    shifted off the no-revision day if it would land on one.
     """
-    raw = completion_date + timedelta(days=get_interval(new_state.category, new_state.stage))
-    return shift_off_sunday(raw)
+    raw = completion_date + timedelta(days=get_interval(new_state.category, new_state.stage, rules))
+    return shift_off_no_revision_day(raw, rules)
 
 
-def is_final_active_recall(completion_date: date, new_state: State, cutoff_date: date) -> bool:
+def is_final_active_recall(
+    completion_date: date, new_state: State, cutoff_date: date, rules: RulesConfig = DEFAULT_RULES
+) -> bool:
     """
     True if the next scheduled review (given the state that resulted from
     this completion) would fall on or after the cutoff date - meaning the
     review just completed is this chapter's Final Active Recall.
     """
-    return next_due_date(completion_date, new_state) >= cutoff_date
+    return next_due_date(completion_date, new_state, rules) >= cutoff_date
 
 
 # Fixed offsets from the exam date (Oct 13 -> Nov 13 is 31 days; Reference

@@ -20,8 +20,14 @@ from app.services.adaptive_engine import (
     DEFAULT_CATEGORY,
     DEFAULT_STAGE,
     shift_off_sunday,
+    shift_off_no_revision_day,
     final_recall_cutoff_date,
     reference_mode_end_date,
+    RulesConfig,
+    DEFAULT_RULES,
+    LADDERS,
+    validate_ladders,
+    ladders_from_dict,
 )
 
 
@@ -167,3 +173,57 @@ class TestExamDateDerivedDates:
 
     def test_reference_mode_end_is_1_day_before_exam(self):
         assert reference_mode_end_date(date(2026, 11, 13)) == date(2026, 11, 12)
+
+
+class TestCustomRules:
+    def test_custom_ladder_changes_interval(self):
+        rules = RulesConfig(ladders=ladders_from_dict({
+            "HARD": [1, 2, 3, 4], "MEDIUM": [5, 8, 11, 14], "EASY": [10, 14, 18, 21],
+        }))
+        assert get_interval(Category.HARD, 0, rules) == 1
+        assert get_interval(Category.MEDIUM, 0, rules) == 5  # unaffected category unchanged
+
+    def test_custom_no_revision_weekday(self):
+        # Skip Wednesdays instead of Sundays
+        rules = RulesConfig(no_revision_weekday=2)  # Wednesday
+        wednesday = date(2026, 1, 21)
+        assert wednesday.strftime("%A") == "Wednesday"
+        assert shift_off_no_revision_day(wednesday, rules) == date(2026, 1, 22)
+        # Sunday is no longer special under this custom rule
+        sunday = date(2026, 1, 25)
+        assert shift_off_no_revision_day(sunday, rules) == sunday
+
+    def test_no_revision_disabled(self):
+        rules = RulesConfig(no_revision_enabled=False)
+        sunday = date(2026, 1, 25)
+        assert shift_off_no_revision_day(sunday, rules) == sunday  # no shift at all
+
+    def test_default_rules_match_builtin_behavior(self):
+        assert DEFAULT_RULES.ladders == LADDERS
+        assert DEFAULT_RULES.no_revision_enabled is True
+        assert DEFAULT_RULES.no_revision_weekday == 6
+
+
+class TestValidateLadders:
+    def test_accepts_valid_ladders(self):
+        validate_ladders({"HARD": [1, 2, 3, 4], "MEDIUM": [5, 8, 11, 14], "EASY": [10, 14, 18, 21]})
+
+    def test_rejects_missing_category(self):
+        with pytest.raises(ValueError):
+            validate_ladders({"HARD": [1, 2, 3, 4], "MEDIUM": [5, 8, 11, 14]})
+
+    def test_rejects_wrong_stage_count(self):
+        with pytest.raises(ValueError):
+            validate_ladders({"HARD": [1, 2, 3], "MEDIUM": [5, 8, 11, 14], "EASY": [10, 14, 18, 21]})
+
+    def test_rejects_non_ascending(self):
+        with pytest.raises(ValueError):
+            validate_ladders({"HARD": [4, 3, 2, 1], "MEDIUM": [5, 8, 11, 14], "EASY": [10, 14, 18, 21]})
+
+    def test_rejects_non_positive(self):
+        with pytest.raises(ValueError):
+            validate_ladders({"HARD": [0, 2, 3, 4], "MEDIUM": [5, 8, 11, 14], "EASY": [10, 14, 18, 21]})
+
+    def test_rejects_duplicates(self):
+        with pytest.raises(ValueError):
+            validate_ladders({"HARD": [1, 2, 2, 4], "MEDIUM": [5, 8, 11, 14], "EASY": [10, 14, 18, 21]})

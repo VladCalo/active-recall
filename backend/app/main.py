@@ -32,6 +32,7 @@ from app.api import (
     reviews_router,
     reference_mode_router,
     settings_router,
+    metrics_router,
     health_router,
     auth_router,
 )
@@ -281,6 +282,7 @@ app.include_router(subjects_router)
 app.include_router(reviews_router)
 app.include_router(reference_mode_router)
 app.include_router(settings_router)
+app.include_router(metrics_router)
 app.include_router(admin_router)
 
 

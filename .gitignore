@@ -139,3 +139,6 @@ docker-compose.override.yml
 # Log files
 *.log
 logs/
+
+# Local buildx builder config (insecure-registry trust for the Pi registry)
+.buildkitd.toml

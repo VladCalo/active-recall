@@ -14,7 +14,7 @@
 import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios'
 
 // Base URL for API requests
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
+const API_BASE_URL = import.meta.env.VITE_API_URL || `${import.meta.env.BASE_URL.replace(/\/$/, '')}/api`
 
 // =============================================================================
 // Types

@@ -15,6 +15,12 @@ RUN npm ci
 # Copy source code
 COPY . .
 
+# Base path the app is served from (e.g. /active-recall2/) - scopes all
+# asset/API URLs so multiple instances can share one hostname without
+# colliding on bare /api or /assets routes
+ARG VITE_BASE=/
+ENV VITE_BASE=$VITE_BASE
+
 # Build the app
 RUN npm run build
 

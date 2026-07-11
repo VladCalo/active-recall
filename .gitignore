@@ -139,3 +139,5 @@ docker-compose.override.yml
 # Log files
 *.log
 logs/
+.buildkitd.toml
+HANDOFF.md

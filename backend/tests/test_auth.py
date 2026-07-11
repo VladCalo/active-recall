@@ -16,19 +16,48 @@ class TestRegister:
     """Tests for POST /api/auth/register endpoint."""
 
     def test_register_success(self, client):
-        """Should register a new user with strong password."""
+        """Should register a new user with strong password - no tokens issued (pending approval)."""
         response = client.post("/api/auth/register", json={
             "email": "newuser@example.com",
             "password": "SecureP@ssw0rd!123"  # Meets all requirements
         })
-        
+
         assert response.status_code == 201
         data = response.json()
-        assert "user" in data
-        assert "access_token" in data
-        assert data["user"]["email"] == "newuser@example.com"
-        assert "password" not in data["user"]
-        assert "password_hash" not in data["user"]
+        assert "message" in data
+        assert "access_token" not in data
+        assert "approve" in data["message"].lower()
+
+    def test_new_registration_defaults_to_unapproved(self, db):
+        """A freshly registered user starts is_approved=False (checked at the model/service
+        level, not via a second HTTP call, to avoid tripping the shared register rate limit)."""
+        from app.services.auth_service import AuthService
+        from app.schemas.auth import UserRegister
+
+        user = AuthService(db).register(
+            UserRegister(email="pending@example.com", password="SecureP@ssw0rd!123")
+        )
+        assert user.is_approved is False
+
+    def test_login_blocked_until_approved(self, client, db, test_user):
+        """An unapproved user cannot log in; approving them unblocks login."""
+        test_user.is_approved = False
+        db.commit()
+
+        response = client.post("/api/auth/login", json={
+            "email": test_user.email,
+            "password": "Test@Password123"
+        })
+        assert response.status_code == 401
+
+        test_user.is_approved = True
+        db.commit()
+
+        response = client.post("/api/auth/login", json={
+            "email": test_user.email,
+            "password": "Test@Password123"
+        })
+        assert response.status_code == 200
 
     def test_register_weak_password_rejected(self, client):
         """Should reject weak passwords."""

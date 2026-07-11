@@ -61,6 +61,11 @@ class AdminService:
         disabled_users = self.db.query(func.count(User.id)).filter(
             User.is_disabled == True
         ).scalar() or 0
+
+        # Users awaiting admin approval
+        pending_approval_users = self.db.query(func.count(User.id)).filter(
+            User.is_approved == False
+        ).scalar() or 0
         
         # Calculate reviews due today and next 7 days (across all users)
         reviews_due_today = 0
@@ -85,6 +90,7 @@ class AdminService:
             "total_subjects": total_subjects,
             "admin_count": admin_count,
             "disabled_users": disabled_users,
+            "pending_approval_users": pending_approval_users,
             "active_users_last_7_days": active_users_7d,
             "subjects_created_last_7_days": subjects_created_7d,
             "reviews_due_today_total": reviews_due_today,
@@ -128,6 +134,7 @@ class AdminService:
                 "email": user.email,
                 "is_admin": user.is_admin,
                 "is_disabled": user.is_disabled,
+                "is_approved": user.is_approved,
                 "created_at": user.created_at.isoformat() if user.created_at else None,
                 "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
                 "subject_count": subject_count,
@@ -166,6 +173,7 @@ class AdminService:
             "email": user.email,
             "is_admin": user.is_admin,
             "is_disabled": user.is_disabled,
+            "is_approved": user.is_approved,
             "failed_login_attempts": user.failed_login_attempts,
             "locked_until": user.locked_until.isoformat() if user.locked_until else None,
             "created_at": user.created_at.isoformat() if user.created_at else None,
@@ -181,23 +189,25 @@ class AdminService:
         current_admin_id: str,
         is_admin: Optional[bool] = None,
         is_disabled: Optional[bool] = None,
+        is_approved: Optional[bool] = None,
     ) -> tuple[Optional[dict], Optional[str]]:
         """
-        Update user admin/disabled status.
-        
+        Update user admin/disabled/approval status.
+
         Args:
             user_id: User to update
             current_admin_id: ID of admin performing the action
             is_admin: New admin status (optional)
             is_disabled: New disabled status (optional)
-            
+            is_approved: New approval status (optional)
+
         Returns:
             Tuple of (updated user dict, error message)
         """
         user = self.db.query(User).filter(User.id == user_id).first()
         if not user:
             return None, "User not found"
-        
+
         # Prevent removing last admin
         if is_admin is False and user.is_admin:
             admin_count = self.db.query(func.count(User.id)).filter(
@@ -205,11 +215,11 @@ class AdminService:
             ).scalar() or 0
             if admin_count <= 1:
                 return None, "Cannot remove the last admin"
-        
+
         # Prevent self-demotion (can still disable self, but not remove admin)
         if user_id == current_admin_id and is_admin is False:
             return None, "Cannot remove your own admin privileges"
-        
+
         # Apply updates
         if is_admin is not None:
             user.is_admin = is_admin
@@ -219,10 +229,12 @@ class AdminService:
             if not is_disabled:
                 user.failed_login_attempts = 0
                 user.locked_until = None
-        
+        if is_approved is not None:
+            user.is_approved = is_approved
+
         self.db.commit()
         self.db.refresh(user)
-        
+
         return self.get_user_details(user_id), None
     
     def delete_user(
@@ -330,6 +342,7 @@ def seed_admin_user(db: Session) -> tuple[bool, str]:
         password_hash=hash_password(settings.admin_password),
         is_admin=True,
         is_disabled=False,
+        is_approved=True,
     )
     
     db.add(admin_user)

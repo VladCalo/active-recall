@@ -131,22 +131,23 @@ class AuthService:
         self.db.commit()
 
     def register(
-        self, 
+        self,
         data: UserRegister,
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None
-    ) -> Tuple[User, str, str]:
+    ) -> User:
         """
-        Register a new user.
-        
+        Register a new user. New accounts start unapproved and cannot log in
+        until an admin approves them - no tokens are issued here.
+
         Args:
             data: Registration data (email, password)
             ip_address: Client IP for logging
             user_agent: Client user agent for logging
-            
+
         Returns:
-            Tuple of (User, access_token, refresh_token_jwt)
-            
+            The created (unapproved) User
+
         Raises:
             ValueError: If email exists or password too weak
         """
@@ -166,28 +167,20 @@ class AuthService:
         # Hash password
         password_hash = hash_password(data.password)
 
-        # Create user
+        # Create user - unapproved until an admin approves them
         user = User(
             email=data.email.lower().strip(),
             password_hash=password_hash,
+            is_approved=False,
         )
-        
+
         self.db.add(user)
         self.db.commit()
         self.db.refresh(user)
-        
-        # Generate tokens
-        access_token = create_access_token({"sub": user.id})
-        refresh_jwt, token_id, family_id = create_refresh_token({"sub": user.id})
-        
-        # Store refresh token record
-        self._create_refresh_token_record(
-            user.id, token_id, family_id, ip_address, user_agent
-        )
-        
+
         auth_logger.register_success(user.id, user.email, ip_address or "unknown")
-        
-        return user, access_token, refresh_jwt
+
+        return user
 
     async def login(
         self, 
@@ -228,7 +221,13 @@ class AuthService:
             await asyncio.sleep(settings.login_delay_seconds)
             auth_logger.login_failure(email, ip_address or "unknown", "account_disabled")
             return None
-        
+
+        # Check if account is still awaiting admin approval
+        if not user.is_approved:
+            await asyncio.sleep(settings.login_delay_seconds)
+            auth_logger.login_failure(email, ip_address or "unknown", "account_not_approved")
+            return None
+
         # Check if account is locked
         if self._is_account_locked(user):
             await asyncio.sleep(settings.login_delay_seconds)
@@ -335,8 +334,8 @@ class AuthService:
         if not user:
             return None
         
-        if user.is_disabled:
-            # User was disabled - revoke their tokens
+        if user.is_disabled or not user.is_approved:
+            # User was disabled (or un-approved) - revoke their tokens
             self._revoke_token_family(family_id)
             return None
         

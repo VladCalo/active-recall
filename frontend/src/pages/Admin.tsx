@@ -17,6 +17,7 @@ import {
   ShieldOff,
   UserX,
   UserCheck,
+  Hourglass,
   Trash2,
   ChevronLeft,
   ChevronRight,
@@ -175,7 +176,7 @@ function AdminDashboard() {
           icon={Users}
           label="Total Users"
           value={stats?.total_users ?? 0}
-          description={`${stats?.admin_count ?? 0} admins, ${stats?.disabled_users ?? 0} disabled`}
+          description={`${stats?.admin_count ?? 0} admins, ${stats?.disabled_users ?? 0} disabled, ${stats?.pending_approval_users ?? 0} pending`}
           iconColor="text-blue-600"
           iconBg="bg-blue-100"
         />
@@ -390,6 +391,26 @@ function UserManagement() {
     }
   }
   
+  const handleToggleApproved = async (user: AdminUserListItem) => {
+    try {
+      await updateAdminUser(user.id, { is_approved: !user.is_approved })
+      toast({
+        title: 'Success',
+        description: `${user.email} has been ${user.is_approved ? 'un-approved' : 'approved'}`,
+      })
+      fetchUsers()
+      if (selectedUser?.id === user.id) {
+        setSelectedUser({ ...selectedUser, is_approved: !user.is_approved })
+      }
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to update user',
+        variant: 'destructive',
+      })
+    }
+  }
+
   const handleDeleteUser = async () => {
     if (!userToDelete) return
     
@@ -490,7 +511,10 @@ function UserManagement() {
                             {user.is_disabled && (
                               <Badge variant="destructive" className="text-xs">Disabled</Badge>
                             )}
-                            {!user.is_admin && !user.is_disabled && (
+                            {!user.is_approved && (
+                              <Badge variant="destructive" className="text-xs">Pending Approval</Badge>
+                            )}
+                            {!user.is_admin && !user.is_disabled && user.is_approved && (
                               <Badge variant="secondary" className="text-xs">User</Badge>
                             )}
                           </div>
@@ -528,6 +552,18 @@ function UserManagement() {
                             <Button
                               variant="ghost"
                               size="icon"
+                              onClick={() => handleToggleApproved(user)}
+                              title={user.is_approved ? 'Revoke approval' : 'Approve'}
+                            >
+                              {user.is_approved ? (
+                                <Hourglass className="h-4 w-4" />
+                              ) : (
+                                <UserCheck className="h-4 w-4 text-green-600" />
+                              )}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               onClick={() => setUserToDelete(user)}
                               className="text-destructive hover:text-destructive"
                               title="Delete user"
@@ -556,13 +592,14 @@ function UserManagement() {
                       <div className="flex gap-1">
                         {user.is_admin && <Badge variant="default" className="text-xs">Admin</Badge>}
                         {user.is_disabled && <Badge variant="destructive" className="text-xs">Disabled</Badge>}
+                        {!user.is_approved && <Badge variant="destructive" className="text-xs">Pending Approval</Badge>}
                       </div>
                     </div>
                     <div className="flex items-center justify-between text-sm text-muted-foreground">
                       <span>{user.subject_count} subjects</span>
                       <span>{user.last_login_at ? formatDate(user.last_login_at) : 'Never logged in'}</span>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <Button
                         variant="outline"
                         size="sm"
@@ -578,6 +615,14 @@ function UserManagement() {
                       >
                         {user.is_disabled ? <UserCheck className="h-4 w-4 mr-1" /> : <UserX className="h-4 w-4 mr-1" />}
                         {user.is_disabled ? 'Enable' : 'Disable'}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleToggleApproved(user)}
+                      >
+                        {user.is_approved ? <Hourglass className="h-4 w-4 mr-1" /> : <UserCheck className="h-4 w-4 mr-1 text-green-600" />}
+                        {user.is_approved ? 'Revoke Approval' : 'Approve'}
                       </Button>
                       <Button
                         variant="outline"
@@ -635,7 +680,10 @@ function UserManagement() {
               <div className="flex gap-2">
                 {selectedUser.is_admin && <Badge>Admin</Badge>}
                 {selectedUser.is_disabled && <Badge variant="destructive">Disabled</Badge>}
-                {!selectedUser.is_admin && !selectedUser.is_disabled && <Badge variant="secondary">User</Badge>}
+                {!selectedUser.is_approved && <Badge variant="destructive">Pending Approval</Badge>}
+                {!selectedUser.is_admin && !selectedUser.is_disabled && selectedUser.is_approved && (
+                  <Badge variant="secondary">User</Badge>
+                )}
               </div>
               
               <div className="grid gap-2 text-sm">

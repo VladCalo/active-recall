@@ -92,26 +92,26 @@ async def get_password_requirements_endpoint():
     )
 
 
-@router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit(settings.rate_limit_register)
 async def register(
     request: Request,
     data: UserRegister,
-    response: Response,
     auth_service: AuthService = Depends(get_auth_service),
 ):
     """
     Register a new user.
-    
+
+    New accounts start unapproved and cannot log in until an admin approves
+    them - no tokens are issued here, unlike login.
+
     Rate limited: 3 registrations per 10 minutes per IP.
     """
     ip = get_client_ip(request)
     user_agent = request.headers.get("User-Agent", "")[:500]
-    
+
     try:
-        user, access_token, refresh_token = auth_service.register(
-            data, ip_address=ip, user_agent=user_agent
-        )
+        auth_service.register(data, ip_address=ip, user_agent=user_agent)
     except ValueError as e:
         error_msg = str(e)
         # Check if it's a password strength issue (safe to show)
@@ -125,13 +125,9 @@ async def register(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Registration failed. Please check your input and try again."
         )
-    
-    set_refresh_cookie(response, refresh_token)
-    
-    return AuthResponse(
-        user=UserResponse.model_validate(user),
-        access_token=access_token,
-        expires_in=settings.access_token_expire_minutes * 60,
+
+    return MessageResponse(
+        message="Registration successful. An administrator needs to approve your account before you can log in."
     )
 
 

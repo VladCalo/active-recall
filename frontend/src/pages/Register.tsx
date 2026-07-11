@@ -6,7 +6,7 @@
  */
 
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { Brain, Mail, Lock, AlertCircle, CheckCircle2, Clock } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -23,9 +23,9 @@ export function Register() {
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [retryAfter, setRetryAfter] = useState<number | null>(null)
-  
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+
   const { register } = useAuth()
-  const navigate = useNavigate()
 
   // Password validation
   const hasMinLength = password.length >= MIN_PASSWORD_LENGTH
@@ -54,8 +54,8 @@ export function Register() {
     setIsLoading(true)
 
     try {
-      await register(email, password)
-      navigate('/', { replace: true })
+      const message = await register(email, password)
+      setSuccessMessage(message)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Registration failed'
       setError(message)
@@ -79,6 +79,29 @@ export function Register() {
       <span className={met ? 'text-green-600' : 'text-muted-foreground'}>{text}</span>
     </div>
   )
+
+  if (successMessage) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center space-y-2 pb-4">
+            <div className="flex justify-center mb-2">
+              <div className="p-3 rounded-full bg-green-100">
+                <CheckCircle2 className="h-7 w-7 sm:h-8 sm:w-8 text-green-600" />
+              </div>
+            </div>
+            <CardTitle className="text-xl sm:text-2xl">Registration successful</CardTitle>
+            <CardDescription className="text-sm">{successMessage}</CardDescription>
+          </CardHeader>
+          <CardContent className="pb-6 text-center">
+            <Link to="/login" className="text-primary hover:underline font-medium text-sm">
+              Back to sign in
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">

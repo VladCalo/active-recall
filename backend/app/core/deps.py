@@ -114,7 +114,14 @@ async def get_current_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is disabled. Contact administrator."
         )
-    
+
+    # Check if user is still awaiting admin approval
+    if not user.is_approved:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is pending admin approval."
+        )
+
     return user
 
 
@@ -175,9 +182,9 @@ async def get_current_user_optional(
         return None
     
     user = db.query(User).filter(User.id == user_id).first()
-    
-    # Return None for disabled users in optional auth
-    if user and user.is_disabled:
+
+    # Return None for disabled or unapproved users in optional auth
+    if user and (user.is_disabled or not user.is_approved):
         return None
-    
+
     return user

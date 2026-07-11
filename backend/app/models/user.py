@@ -72,6 +72,14 @@ class User(Base):
         nullable=False,
         default=False
     )
+    # New self-registrations start unapproved and can't log in until an
+    # admin approves them (see AuthService.register/login). Column defaults
+    # to True so existing accounts aren't retroactively locked out.
+    is_approved: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True
+    )
     
     # Brute force protection
     failed_login_attempts: Mapped[int] = mapped_column(

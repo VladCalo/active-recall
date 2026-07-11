@@ -25,7 +25,7 @@ interface AuthContextType {
   isLoading: boolean
   isAuthenticated: boolean
   login: (email: string, password: string, rememberMe?: boolean) => Promise<void>
-  register: (email: string, password: string) => Promise<void>
+  register: (email: string, password: string) => Promise<string>
   logout: () => Promise<void>
 }
 
@@ -64,8 +64,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [])
 
   const register = useCallback(async (email: string, password: string) => {
+    // Registration no longer logs the user in - new accounts need admin
+    // approval first. Return the server's message for the caller to show.
     const response = await apiRegister(email, password)
-    setUser(response.user)
+    return response.message
   }, [])
 
   const logout = useCallback(async () => {

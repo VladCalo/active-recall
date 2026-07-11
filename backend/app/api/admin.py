@@ -40,6 +40,7 @@ class StatsResponse(BaseModel):
     total_subjects: int
     admin_count: int
     disabled_users: int
+    pending_approval_users: int
     active_users_last_7_days: int
     subjects_created_last_7_days: int
     reviews_due_today_total: int
@@ -52,6 +53,7 @@ class UserListItem(BaseModel):
     email: str
     is_admin: bool
     is_disabled: bool
+    is_approved: bool
     created_at: Optional[str]
     last_login_at: Optional[str]
     subject_count: int
@@ -79,6 +81,7 @@ class UserDetailResponse(BaseModel):
     email: str
     is_admin: bool
     is_disabled: bool
+    is_approved: bool
     failed_login_attempts: int
     locked_until: Optional[str]
     created_at: Optional[str]
@@ -92,6 +95,7 @@ class UserUpdateRequest(BaseModel):
     """Request to update user."""
     is_admin: Optional[bool] = None
     is_disabled: Optional[bool] = None
+    is_approved: Optional[bool] = None
 
 
 class TrafficStatsResponse(BaseModel):
@@ -201,6 +205,7 @@ def update_user(
         current_admin_id=current_admin.id,
         is_admin=update.is_admin,
         is_disabled=update.is_disabled,
+        is_approved=update.is_approved,
     )
     
     if error:

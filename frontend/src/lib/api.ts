@@ -167,6 +167,7 @@ export interface AdminStats {
   total_subjects: number
   admin_count: number
   disabled_users: number
+  pending_approval_users: number
   active_users_last_7_days: number
   subjects_created_last_7_days: number
   reviews_due_today_total: number
@@ -178,6 +179,7 @@ export interface AdminUserListItem {
   email: string
   is_admin: boolean
   is_disabled: boolean
+  is_approved: boolean
   created_at: string | null
   last_login_at: string | null
   subject_count: number
@@ -202,6 +204,7 @@ export interface AdminUserDetail {
   email: string
   is_admin: boolean
   is_disabled: boolean
+  is_approved: boolean
   failed_login_attempts: number
   locked_until: string | null
   created_at: string | null
@@ -226,6 +229,10 @@ export interface AuthResponse {
   access_token: string
   token_type: string
   expires_in: number
+}
+
+export interface MessageResponse {
+  message: string
 }
 
 export interface ApiError {
@@ -384,10 +391,9 @@ function getErrorMessage(error: unknown): string {
 // Auth API Functions
 // =============================================================================
 
-export async function register(email: string, password: string): Promise<AuthResponse> {
+export async function register(email: string, password: string): Promise<MessageResponse> {
   try {
-    const response = await api.post<AuthResponse>('/auth/register', { email, password })
-    setAccessToken(response.data.access_token)
+    const response = await api.post<MessageResponse>('/auth/register', { email, password })
     return response.data
   } catch (error) {
     throw new Error(getErrorMessage(error))
@@ -592,7 +598,7 @@ export async function getAdminUserDetail(userId: string): Promise<AdminUserDetai
 
 export async function updateAdminUser(
   userId: string,
-  data: { is_admin?: boolean; is_disabled?: boolean }
+  data: { is_admin?: boolean; is_disabled?: boolean; is_approved?: boolean }
 ): Promise<AdminUserDetail> {
   try {
     const response = await api.patch<AdminUserDetail>(`/admin/users/${userId}`, data)

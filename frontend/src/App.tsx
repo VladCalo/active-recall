@@ -14,6 +14,7 @@ import { Dashboard } from '@/pages/Dashboard'
 import { Subjects } from '@/pages/Subjects'
 import { Calendar } from '@/pages/Calendar'
 import { Settings } from '@/pages/Settings'
+import { MetricsPage } from '@/pages/Metrics'
 import { Admin } from '@/pages/Admin'
 import { Login } from '@/pages/Login'
 import { Register } from '@/pages/Register'
@@ -114,6 +115,16 @@ function AppRoutes() {
           <ProtectedRoute>
             <Layout>
               <Settings />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/metrics"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <MetricsPage />
             </Layout>
           </ProtectedRoute>
         }
